@@ -563,12 +563,18 @@
         return zone === 'Awake' ? '#e8d5a3' : '#4a6fa5';
       }
 
-      function nearestProgressFromPoint(x, y) {
+      function nearestProgressFromPoint(x, y, aroundProgress = null) {
         let bestP = 0;
         let bestD = Infinity;
-        const steps = 720;
+        const hasAround = typeof aroundProgress === 'number';
+        const steps = hasAround ? 420 : 720;
+        const span = 0.28;
+        const start = hasAround ? Math.max(0, aroundProgress - span) : 0;
+        const end = hasAround ? Math.min(1, aroundProgress + span) : 1;
         for (let i = 0; i <= steps; i += 1) {
-          const p = i / steps;
+          const p = hasAround
+            ? start + ((end - start) * i) / steps
+            : i / steps;
           const pt = pointOnPath(p);
           const dx = pt.x - x;
           const dy = pt.y - y;
@@ -661,7 +667,7 @@
       function onDragMove(event) {
         if (!dragging) return;
         const pt = svgPointFromClient(event.clientX, event.clientY);
-        const candidate = nearestProgressFromPoint(pt.x, pt.y);
+        const candidate = nearestProgressFromPoint(pt.x, pt.y, wrap(dragProgressContinuous));
         const target = unwrapNear(dragProgressContinuous, candidate);
         const maxStep = 0.08;
         const delta = target - dragProgressContinuous;
