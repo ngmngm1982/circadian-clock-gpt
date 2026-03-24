@@ -546,7 +546,7 @@
         }
         if (p < 0.75) {
           const t = (p - 0.25) / 0.5;
-          return pointOnCircle(geometry.lower, -90 - t * 360);
+          return pointOnCircle(geometry.lower, -90 + t * 360);
         }
         const t = (p - 0.75) / 0.25;
         return pointOnCircle(geometry.upper, 90 + t * 180);
@@ -562,12 +562,16 @@
         return zone === 'Awake' ? '#e8d5a3' : '#4a6fa5';
       }
 
-      function nearestProgressFromPoint(x, y) {
+      function nearestProgressFromPoint(x, y, aroundProgress = null) {
         let bestP = 0;
         let bestD = Infinity;
-        const steps = 720;
+        const useLocalSearch = typeof aroundProgress === 'number';
+        const steps = useLocalSearch ? 360 : 720;
+        const span = 0.3;
         for (let i = 0; i <= steps; i += 1) {
-          const p = i / steps;
+          const p = useLocalSearch
+            ? wrap(aroundProgress + (((i / steps) * 2 - 1) * span))
+            : i / steps;
           const pt = pointOnPath(p);
           const dx = pt.x - x;
           const dy = pt.y - y;
@@ -655,7 +659,7 @@
       function onDragMove(event) {
         if (!dragging) return;
         const pt = svgPointFromClient(event.clientX, event.clientY);
-        state.zeroProgress = nearestProgressFromPoint(pt.x, pt.y);
+        state.zeroProgress = nearestProgressFromPoint(pt.x, pt.y, state.zeroProgress);
         updateStatic();
         save();
       }
