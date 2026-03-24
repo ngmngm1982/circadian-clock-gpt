@@ -501,6 +501,7 @@
       };
 
       let dragging = false;
+      let dragProgressContinuous = 0;
       let raf = null;
 
       function load() {
@@ -562,16 +563,12 @@
         return zone === 'Awake' ? '#e8d5a3' : '#4a6fa5';
       }
 
-      function nearestProgressFromPoint(x, y, aroundProgress = null) {
+      function nearestProgressFromPoint(x, y) {
         let bestP = 0;
         let bestD = Infinity;
-        const useLocalSearch = typeof aroundProgress === 'number';
-        const steps = useLocalSearch ? 360 : 720;
-        const span = 0.3;
+        const steps = 720;
         for (let i = 0; i <= steps; i += 1) {
-          const p = useLocalSearch
-            ? wrap(aroundProgress + (((i / steps) * 2 - 1) * span))
-            : i / steps;
+          const p = i / steps;
           const pt = pointOnPath(p);
           const dx = pt.x - x;
           const dy = pt.y - y;
@@ -582,6 +579,10 @@
           }
         }
         return bestP;
+      }
+
+      function unwrapNear(reference, value) {
+        return value + Math.round(reference - value);
       }
 
       function svgPointFromClient(clientX, clientY) {
@@ -652,6 +653,7 @@
 
       function onDragStart(event) {
         dragging = true;
+        dragProgressContinuous = state.zeroProgress;
         svg.setPointerCapture(event.pointerId);
         onDragMove(event);
       }
@@ -659,7 +661,16 @@
       function onDragMove(event) {
         if (!dragging) return;
         const pt = svgPointFromClient(event.clientX, event.clientY);
-        state.zeroProgress = nearestProgressFromPoint(pt.x, pt.y, state.zeroProgress);
+        const candidate = nearestProgressFromPoint(pt.x, pt.y);
+        const target = unwrapNear(dragProgressContinuous, candidate);
+        const maxStep = 0.08;
+        const delta = target - dragProgressContinuous;
+        if (Math.abs(delta) > maxStep) {
+          dragProgressContinuous += Math.sign(delta) * maxStep;
+        } else {
+          dragProgressContinuous = target;
+        }
+        state.zeroProgress = wrap(dragProgressContinuous);
         updateStatic();
         save();
       }
