@@ -568,8 +568,8 @@
         let bestU = 0;
         let bestD = Infinity;
         const hasAround = typeof aroundProgress === 'number';
-        const steps = hasAround ? 480 : 720;
-        const span = 0.22;
+        const steps = hasAround ? 540 : 720;
+        const span = 0.4;
         for (let i = 0; i <= steps; i += 1) {
           const u = hasAround
             ? aroundProgress - span + ((2 * span) * i) / steps
@@ -665,13 +665,7 @@
         if (!dragging) return;
         const pt = svgPointFromClient(event.clientX, event.clientY);
         const target = nearestProgressFromPoint(pt.x, pt.y, dragProgressContinuous);
-        const maxStep = 0.08;
-        const delta = target - dragProgressContinuous;
-        if (Math.abs(delta) > maxStep) {
-          dragProgressContinuous += Math.sign(delta) * maxStep;
-        } else {
-          dragProgressContinuous = target;
-        }
+        dragProgressContinuous = target;
         state.zeroProgress = wrap(dragProgressContinuous);
         updateStatic();
         save();
