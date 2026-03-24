@@ -565,16 +565,16 @@
 
       function nearestProgressFromPoint(x, y, aroundProgress = null) {
         let bestP = 0;
+        let bestU = 0;
         let bestD = Infinity;
         const hasAround = typeof aroundProgress === 'number';
-        const steps = hasAround ? 420 : 720;
-        const span = 0.28;
-        const start = hasAround ? Math.max(0, aroundProgress - span) : 0;
-        const end = hasAround ? Math.min(1, aroundProgress + span) : 1;
+        const steps = hasAround ? 480 : 720;
+        const span = 0.22;
         for (let i = 0; i <= steps; i += 1) {
-          const p = hasAround
-            ? start + ((end - start) * i) / steps
+          const u = hasAround
+            ? aroundProgress - span + ((2 * span) * i) / steps
             : i / steps;
+          const p = hasAround ? wrap(u) : u;
           const pt = pointOnPath(p);
           const dx = pt.x - x;
           const dy = pt.y - y;
@@ -582,13 +582,10 @@
           if (d < bestD) {
             bestD = d;
             bestP = p;
+            bestU = u;
           }
         }
-        return bestP;
-      }
-
-      function unwrapNear(reference, value) {
-        return value + Math.round(reference - value);
+        return hasAround ? bestU : bestP;
       }
 
       function svgPointFromClient(clientX, clientY) {
@@ -667,8 +664,7 @@
       function onDragMove(event) {
         if (!dragging) return;
         const pt = svgPointFromClient(event.clientX, event.clientY);
-        const candidate = nearestProgressFromPoint(pt.x, pt.y, wrap(dragProgressContinuous));
-        const target = unwrapNear(dragProgressContinuous, candidate);
+        const target = nearestProgressFromPoint(pt.x, pt.y, dragProgressContinuous);
         const maxStep = 0.08;
         const delta = target - dragProgressContinuous;
         if (Math.abs(delta) > maxStep) {
