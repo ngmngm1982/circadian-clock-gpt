@@ -502,6 +502,7 @@
 
       let dragging = false;
       let dragProgressContinuous = 0;
+      let dragDirection = 0;
       let raf = null;
 
       function load() {
@@ -657,6 +658,7 @@
       function onDragStart(event) {
         dragging = true;
         dragProgressContinuous = state.zeroProgress;
+        dragDirection = 0;
         svg.setPointerCapture(event.pointerId);
         onDragMove(event);
       }
@@ -664,9 +666,20 @@
       function onDragMove(event) {
         if (!dragging) return;
         const pt = svgPointFromClient(event.clientX, event.clientY);
-        const target = nearestProgressFromPoint(pt.x, pt.y, dragProgressContinuous);
+        let target = nearestProgressFromPoint(pt.x, pt.y, dragProgressContinuous);
+        const directionThreshold = 0.006;
+        let delta = target - dragProgressContinuous;
+        if (dragDirection === 0 && Math.abs(delta) >= directionThreshold) {
+          dragDirection = Math.sign(delta);
+        }
+        if (dragDirection > 0 && delta < 0) {
+          target += 1;
+          delta = target - dragProgressContinuous;
+        } else if (dragDirection < 0 && delta > 0) {
+          target -= 1;
+          delta = target - dragProgressContinuous;
+        }
         const maxStep = 0.16;
-        const delta = target - dragProgressContinuous;
         if (Math.abs(delta) > maxStep) {
           dragProgressContinuous += Math.sign(delta) * maxStep;
         } else {
@@ -680,6 +693,7 @@
       function onDragEnd(event) {
         if (!dragging) return;
         dragging = false;
+        dragDirection = 0;
         try { svg.releasePointerCapture(event.pointerId); } catch (_) {}
       }
 
