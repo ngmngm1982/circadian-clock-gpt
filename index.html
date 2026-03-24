@@ -564,29 +564,26 @@
         return zone === 'Awake' ? '#e8d5a3' : '#4a6fa5';
       }
 
-      function nearestProgressFromPoint(x, y, aroundProgress = null) {
+      function nearestProgressFromPoint(x, y) {
         let bestP = 0;
-        let bestU = 0;
-        let bestScore = Infinity;
-        const hasAround = typeof aroundProgress === 'number';
+        let bestD = Infinity;
         const steps = 720;
-        const continuityWeight = 2400;
         for (let i = 0; i <= steps; i += 1) {
           const p = i / steps;
-          const u = hasAround ? p + Math.round(aroundProgress - p) : p;
           const pt = pointOnPath(p);
           const dx = pt.x - x;
           const dy = pt.y - y;
-          const distanceScore = dx * dx + dy * dy;
-          const continuityPenalty = hasAround ? (u - aroundProgress) * (u - aroundProgress) : 0;
-          const score = distanceScore + continuityPenalty * continuityWeight;
-          if (score < bestScore) {
-            bestScore = score;
+          const d = dx * dx + dy * dy;
+          if (d < bestD) {
+            bestD = d;
             bestP = p;
-            bestU = u;
           }
         }
-        return hasAround ? bestU : bestP;
+        return bestP;
+      }
+
+      function unwrapToNearest(reference, value) {
+        return value + Math.round(reference - value);
       }
 
       function svgPointFromClient(clientX, clientY) {
@@ -666,23 +663,23 @@
       function onDragMove(event) {
         if (!dragging) return;
         const pt = svgPointFromClient(event.clientX, event.clientY);
-        let target = nearestProgressFromPoint(pt.x, pt.y, dragProgressContinuous);
+        const candidate = nearestProgressFromPoint(pt.x, pt.y);
+        let target = unwrapToNearest(dragProgressContinuous, candidate);
         const directionThreshold = 0.006;
         let delta = target - dragProgressContinuous;
         if (dragDirection === 0 && Math.abs(delta) >= directionThreshold) {
           dragDirection = Math.sign(delta);
         }
         if (dragDirection > 0 && delta < 0) {
-          target += 1;
-          delta = target - dragProgressContinuous;
+          delta += 1;
+          target = dragProgressContinuous + delta;
         } else if (dragDirection < 0 && delta > 0) {
-          target -= 1;
-          delta = target - dragProgressContinuous;
+          delta -= 1;
+          target = dragProgressContinuous + delta;
         }
-        const maxStep = 0.16;
-        if (Math.abs(delta) > maxStep) {
-          dragProgressContinuous += Math.sign(delta) * maxStep;
-        } else {
+        const maxStep = 0.12;
+        dragProgressContinuous += clamp(delta, -maxStep, maxStep);
+        if (Math.abs(delta) <= maxStep) {
           dragProgressContinuous = target;
         }
         state.zeroProgress = wrap(dragProgressContinuous);
