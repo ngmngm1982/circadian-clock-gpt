@@ -532,6 +532,8 @@
       let runtimeFit = { scale: 1, xShift: 0, yShift: 0 };
       let fitDirty = true;
       let raf = null;
+      let lastLayoutWidth = Math.round(window.innerWidth || 0);
+      let lastLayoutPortrait = false;
 
       function load() {
         try {
@@ -753,6 +755,18 @@
 
       function isPhonePortrait() {
         return window.matchMedia('(max-width: 700px) and (orientation: portrait)').matches;
+      }
+
+      function requestRefitForLayoutChange(force = false) {
+        const currentWidth = Math.round(window.innerWidth || document.documentElement.clientWidth || 0);
+        const currentPortrait = isPhonePortrait();
+        const widthChanged = Math.abs(currentWidth - lastLayoutWidth) >= 2;
+        const portraitChanged = currentPortrait !== lastLayoutPortrait;
+        if (!force && !widthChanged && !portraitChanged) return;
+        lastLayoutWidth = currentWidth;
+        lastLayoutPortrait = currentPortrait;
+        fitDirty = true;
+        updateStatic();
       }
 
       function updateRuntimeFit() {
@@ -1130,6 +1144,7 @@
       }
 
       load();
+      lastLayoutPortrait = isPhonePortrait();
       updateStatic();
       render();
 
@@ -1177,17 +1192,11 @@
       });
 
       window.addEventListener('resize', () => {
-        fitDirty = true;
-        updateStatic();
+        requestRefitForLayoutChange();
       });
       if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', () => {
-          fitDirty = true;
-          updateStatic();
-        });
-        window.visualViewport.addEventListener('scroll', () => {
-          fitDirty = true;
-          updateStatic();
+          requestRefitForLayoutChange();
         });
       }
     })();
