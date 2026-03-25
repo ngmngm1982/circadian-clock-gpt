@@ -504,7 +504,7 @@
       let dragProgressContinuous = 0;
       let dragPointerId = null;
       let dragLastPoint = null;
-      let dragDirection = 0;
+      let dragTravelDirection = 0;
       let raf = null;
 
       function load() {
@@ -546,14 +546,14 @@
         const p = wrap(progress);
         if (p < 0.25) {
           const t = p / 0.25;
-          return pointOnCircle(geometry.upper, -90 + t * 180);
+          return pointOnCircle(geometry.upper, -90 - t * 180);
         }
         if (p < 0.75) {
           const t = (p - 0.25) / 0.5;
           return pointOnCircle(geometry.lower, -90 + t * 360);
         }
         const t = (p - 0.75) / 0.25;
-        return pointOnCircle(geometry.upper, 90 + t * 180);
+        return pointOnCircle(geometry.upper, 90 - t * 180);
       }
 
       function zoneForProgress(progress) {
@@ -564,13 +564,6 @@
       function colorForProgress(progress) {
         const zone = zoneForProgress(progress);
         return zone === 'Awake' ? '#e8d5a3' : '#4a6fa5';
-      }
-
-      function distanceToPathSquared(x, y, progress) {
-        const pt = pointOnPath(progress);
-        const dx = pt.x - x;
-        const dy = pt.y - y;
-        return dx * dx + dy * dy;
       }
 
       function tangentOnPath(progress) {
@@ -589,45 +582,6 @@
         const b = pointOnPath(progress + eps);
         const dist = Math.hypot(b.x - a.x, b.y - a.y);
         return dist / (2 * eps);
-      }
-
-      function nearestProgressFromPoint(x, y, aroundProgress = null, span = 0.22, preferredDirection = 0) {
-        const hasAround = typeof aroundProgress === 'number';
-        if (!hasAround) {
-          let bestP = 0;
-          let bestDistance = Infinity;
-          const steps = 720;
-          for (let i = 0; i <= steps; i += 1) {
-            const p = i / steps;
-            const distance = distanceToPathSquared(x, y, p);
-            if (distance < bestDistance) {
-              bestDistance = distance;
-              bestP = p;
-            }
-          }
-          return bestP;
-        }
-
-        const localSpan = clamp(span, 0.1, 0.24);
-        const minU = aroundProgress - localSpan;
-        const maxU = aroundProgress + localSpan;
-        const coarseSteps = 480;
-        let bestU = aroundProgress;
-        let bestScore = Infinity;
-        const directionPenaltyWeight = 65000;
-        for (let i = 0; i <= coarseSteps; i += 1) {
-          const u = minU + ((maxU - minU) * i) / coarseSteps;
-          const delta = u - aroundProgress;
-          let score = distanceToPathSquared(x, y, u);
-          if (preferredDirection !== 0 && delta * preferredDirection < 0) {
-            score += delta * delta * directionPenaltyWeight;
-          }
-          if (score < bestScore) {
-            bestScore = score;
-            bestU = u;
-          }
-        }
-        return bestU;
       }
 
       function svgPointFromClient(clientX, clientY) {
@@ -704,7 +658,7 @@
         dragPointerId = event.pointerId;
         dragProgressContinuous = state.zeroProgress;
         dragLastPoint = startPt;
-        dragDirection = 0;
+        dragTravelDirection = 0;
         try { svg.setPointerCapture(event.pointerId); } catch (_) {}
         onDragMove(event);
       }
@@ -717,24 +671,24 @@
         const moveX = pt.x - lastPt.x;
         const moveY = pt.y - lastPt.y;
         const moveDistance = Math.hypot(moveX, moveY);
+        if (moveDistance < 0.04) {
+          dragLastPoint = pt;
+          return;
+        }
         const tangent = tangentOnPath(dragProgressContinuous);
         const projection = moveX * tangent.x + moveY * tangent.y;
-        const speed = pathSpeedOnProgress(dragProgressContinuous);
-        let motionDelta = clamp(projection / speed, -0.18, 0.18);
-        if (Math.abs(motionDelta) > 0.002) {
-          dragDirection = Math.sign(motionDelta);
+        const speed = Math.max(pathSpeedOnProgress(dragProgressContinuous), 1e-6);
+        let delta = projection / speed;
+        if (Math.abs(delta) < 0.0012 && moveDistance > 0.7 && dragTravelDirection !== 0) {
+          // Keep crossing momentum near 6/18 when projection gets numerically tiny.
+          delta = dragTravelDirection * clamp(moveDistance * 0.00055, 0, 0.012);
         }
-        const motionU = dragProgressContinuous + motionDelta;
-        const searchSpan = clamp(0.1 + moveDistance * 0.0035, 0.1, 0.2);
-        const snappedU = nearestProgressFromPoint(
-          pt.x,
-          pt.y,
-          motionU,
-          searchSpan,
-          dragDirection
-        );
-        const correction = snappedU - motionU;
-        dragProgressContinuous = motionU + clamp(correction, -0.06, 0.06);
+        const maxStep = clamp(0.018 + moveDistance * 0.0018, 0.018, 0.075);
+        delta = clamp(delta, -maxStep, maxStep);
+        if (Math.abs(delta) > 0.0008) {
+          dragTravelDirection = Math.sign(delta);
+        }
+        dragProgressContinuous += delta;
         dragLastPoint = pt;
         state.zeroProgress = wrap(dragProgressContinuous);
         updateStatic();
@@ -746,7 +700,7 @@
         dragging = false;
         dragPointerId = null;
         dragLastPoint = null;
-        dragDirection = 0;
+        dragTravelDirection = 0;
         try { svg.releasePointerCapture(event.pointerId); } catch (_) {}
       }
 
