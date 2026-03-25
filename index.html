@@ -584,6 +584,46 @@
         return dist / (2 * eps);
       }
 
+      function distanceToProgressSq(progress, point) {
+        const candidate = pointOnPath(progress);
+        const dx = candidate.x - point.x;
+        const dy = candidate.y - point.y;
+        return dx * dx + dy * dy;
+      }
+
+      function nearestProgressNear(point, centerProgress, windowSize = 0.16) {
+        const samples = 24;
+        let bestProgress = centerProgress;
+        let bestDistance = distanceToProgressSq(centerProgress, point);
+
+        for (let i = -samples; i <= samples; i += 1) {
+          const progress = centerProgress + (i / samples) * windowSize;
+          const distance = distanceToProgressSq(progress, point);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestProgress = progress;
+          }
+        }
+
+        let step = windowSize / samples;
+        for (let i = 0; i < 8; i += 1) {
+          const left = bestProgress - step;
+          const right = bestProgress + step;
+          const leftDistance = distanceToProgressSq(left, point);
+          const rightDistance = distanceToProgressSq(right, point);
+          if (leftDistance < bestDistance && leftDistance <= rightDistance) {
+            bestDistance = leftDistance;
+            bestProgress = left;
+          } else if (rightDistance < bestDistance) {
+            bestDistance = rightDistance;
+            bestProgress = right;
+          }
+          step *= 0.5;
+        }
+
+        return bestProgress;
+      }
+
       function svgPointFromClient(clientX, clientY) {
         const rect = svg.getBoundingClientRect();
         const viewBox = svg.viewBox.baseVal;
@@ -678,12 +718,11 @@
         const tangent = tangentOnPath(dragProgressContinuous);
         const projection = moveX * tangent.x + moveY * tangent.y;
         const speed = Math.max(pathSpeedOnProgress(dragProgressContinuous), 1e-6);
-        let delta = projection / speed;
-        if (Math.abs(delta) < 0.0012 && moveDistance > 0.7 && dragTravelDirection !== 0) {
-          // Keep crossing momentum near 6/18 when projection gets numerically tiny.
-          delta = dragTravelDirection * clamp(moveDistance * 0.00055, 0, 0.012);
-        }
-        const maxStep = clamp(0.018 + moveDistance * 0.0018, 0.018, 0.075);
+        const predictedProgress = dragProgressContinuous + projection / speed;
+        const targetProgress = nearestProgressNear(pt, predictedProgress, 0.16);
+        let delta = targetProgress - dragProgressContinuous;
+        const catchupBoost = Math.abs(delta) * 0.7;
+        const maxStep = clamp(0.02 + moveDistance * 0.003 + catchupBoost, 0.02, 0.18);
         delta = clamp(delta, -maxStep, maxStep);
         if (Math.abs(delta) > 0.0008) {
           dragTravelDirection = Math.sign(delta);
