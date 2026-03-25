@@ -500,16 +500,16 @@
       const baseLoop = {
         cx: 180,
         centerY: 338,
-        rx: 122,
-        baseRy: 126,
+        rx: 128,
+        baseRy: 138,
       };
       const minCycleHours = sleepHoursRange.min + awakeHoursRange.min;
       const maxCycleHours = sleepHoursRange.max + awakeHoursRange.max;
-      const verticalScaleRange = { min: 0.92, max: 1.2 };
-      const horizontalScaleRange = { min: 0.96, max: 1.08 };
-      const ratioStrength = 0.4;
-      const ratioHorizontalStrength = 0.16;
-      const displayFit = { x: 1.06, y: 1.16, yOffset: -6 };
+      const verticalScaleRange = { min: 1.02, max: 1.3 };
+      const horizontalScaleRange = { min: 1.02, max: 1.14 };
+      const ratioStrength = 0.42;
+      const ratioHorizontalStrength = 0.18;
+      const displayFit = { x: 1.12, y: 1.28, yOffset: -18 };
 
       const localEpoch = new Date(1970, 0, 1, 0, 0, 0, 0).getTime();
 
@@ -602,7 +602,7 @@
         const upperRy = baseLoop.baseRy * verticalScale * upperRatioScale;
         const lowerRy = baseLoop.baseRy * verticalScale * lowerRatioScale;
         const separation = upperRy + lowerRy;
-        const midY = baseLoop.centerY + ratioDelta * 20;
+        const midY = baseLoop.centerY + ratioDelta * 14;
 
         return {
           total,
