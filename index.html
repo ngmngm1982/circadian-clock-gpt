@@ -382,13 +382,13 @@
         </defs>
 
         <g opacity="0.2">
-          <ellipse id="upperThinTrack" cx="180" cy="220" rx="118" ry="118" fill="none" stroke="url(#goldStroke)" stroke-width="1.5" />
-          <ellipse id="lowerThinTrack" cx="180" cy="456" rx="118" ry="118" fill="none" stroke="url(#blueStroke)" stroke-width="1.5" />
+          <path id="awakeThinTrack" d="" fill="none" stroke="url(#goldStroke)" stroke-width="1.5" />
+          <path id="sleepThinTrack" d="" fill="none" stroke="url(#blueStroke)" stroke-width="1.5" />
         </g>
 
         <g opacity="0.85">
-          <ellipse id="upperBoldTrack" cx="180" cy="220" rx="118" ry="118" fill="none" stroke="url(#goldStroke)" stroke-width="10" stroke-linecap="round" filter="url(#softGlow)" />
-          <ellipse id="lowerBoldTrack" cx="180" cy="456" rx="118" ry="118" fill="none" stroke="url(#blueStroke)" stroke-width="10" stroke-linecap="round" filter="url(#softGlow)" />
+          <path id="awakeBoldTrack" d="" fill="none" stroke="url(#goldStroke)" stroke-width="10" stroke-linecap="round" filter="url(#softGlow)" />
+          <path id="sleepBoldTrack" d="" fill="none" stroke="url(#blueStroke)" stroke-width="10" stroke-linecap="round" filter="url(#softGlow)" />
         </g>
 
         <g opacity="0.3">
@@ -485,10 +485,10 @@
       const sheet = document.getElementById('sheet');
       const sheetHeader = document.getElementById('sheetHeader');
       const sheetToggle = document.getElementById('sheetToggle');
-      const upperThinTrack = document.getElementById('upperThinTrack');
-      const lowerThinTrack = document.getElementById('lowerThinTrack');
-      const upperBoldTrack = document.getElementById('upperBoldTrack');
-      const lowerBoldTrack = document.getElementById('lowerBoldTrack');
+      const awakeThinTrack = document.getElementById('awakeThinTrack');
+      const sleepThinTrack = document.getElementById('sleepThinTrack');
+      const awakeBoldTrack = document.getElementById('awakeBoldTrack');
+      const sleepBoldTrack = document.getElementById('sleepBoldTrack');
       const midLine = document.getElementById('midLine');
       const label0 = document.getElementById('label0');
       const label6 = document.getElementById('label6');
@@ -558,10 +558,6 @@
         return ((value % 1) + 1) % 1;
       }
 
-      function toRad(deg) {
-        return (deg * Math.PI) / 180;
-      }
-
       function smoothstep01(value) {
         const t = clamp(value, 0, 1);
         return t * t * (3 - 2 * t);
@@ -605,12 +601,13 @@
         const upperRy = baseLoop.baseRy * verticalScale * upperRatioScale;
         const lowerRy = baseLoop.baseRy * verticalScale * lowerRatioScale;
         const separation = upperRy + lowerRy;
+        const midY = baseLoop.centerY + ratioDelta * 26;
 
         return {
           total,
-          midY: baseLoop.centerY,
-          upper: { cx: baseLoop.cx, cy: baseLoop.centerY - separation * 0.5, rx: upperRx, ry: upperRy },
-          lower: { cx: baseLoop.cx, cy: baseLoop.centerY + separation * 0.5, rx: lowerRx, ry: lowerRy },
+          midY,
+          upper: { cx: baseLoop.cx, cy: midY - separation * 0.5, rx: upperRx, ry: upperRy },
+          lower: { cx: baseLoop.cx, cy: midY + separation * 0.5, rx: lowerRx, ry: lowerRy },
         };
       }
 
@@ -619,28 +616,39 @@
         return activeGeometry;
       }
 
-      function pointOnLoop(loop, deg) {
-        const a = toRad(deg);
-        return {
-          x: loop.cx + Math.cos(a) * loop.rx,
-          y: loop.cy + Math.sin(a) * loop.ry,
-        };
-      }
-
-      function pointOnPath(progress) {
-        const figure = currentFigureGeometry();
+      function phaseForProgress(progress) {
         const fractions = cycleFractions();
         const p = wrap(progress);
         if (p < fractions.awakeHalf) {
           const t = p / fractions.awakeHalf;
-          return pointOnLoop(figure.upper, -90 - t * 180);
+          return t * (Math.PI * 0.5);
         }
         if (p < fractions.awakeHalf + fractions.sleep) {
           const t = (p - fractions.awakeHalf) / fractions.sleep;
-          return pointOnLoop(figure.lower, -90 + t * 360);
+          return Math.PI * 0.5 + t * Math.PI;
         }
         const t = (p - (fractions.awakeHalf + fractions.sleep)) / fractions.awakeHalf;
-        return pointOnLoop(figure.upper, 90 - t * 180);
+        return Math.PI * 1.5 + t * (Math.PI * 0.5);
+      }
+
+      function pointAtPhase(phase) {
+        const figure = currentFigureGeometry();
+        const v = Math.cos(phase);
+        const h = Math.sin(phase);
+        const topBlend = smoothstep01((v + 1) * 0.5);
+        const rx = figure.lower.rx + (figure.upper.rx - figure.lower.rx) * topBlend;
+        const ry = figure.lower.ry + (figure.upper.ry - figure.lower.ry) * topBlend;
+        const neckPinch = 0.32 + 0.68 * v * v;
+        const sideBulge = 0.86 + 0.14 * (1 - v * v);
+        const xTerm = 2.35 * h * v * neckPinch * sideBulge;
+        return {
+          x: baseLoop.cx + rx * xTerm,
+          y: figure.midY - v * ry,
+        };
+      }
+
+      function pointOnPath(progress) {
+        return pointAtPhase(phaseForProgress(progress));
       }
 
       function zoneForProgress(progress) {
@@ -737,23 +745,49 @@
         sheetHeader.setAttribute('aria-expanded', String(state.sheetOpen));
       }
 
+      function buildPathSegment(startProgress, endProgress, samples = 96) {
+        let d = '';
+        for (let i = 0; i <= samples; i += 1) {
+          const p = startProgress + ((endProgress - startProgress) * i) / samples;
+          const pt = pointOnPath(p);
+          d += `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)} `;
+        }
+        return d.trim();
+      }
+
+      function awakeTrackPath() {
+        const fractions = cycleFractions();
+        const first = buildPathSegment(0, fractions.awakeHalf, 88);
+        const second = buildPathSegment(fractions.awakeHalf + fractions.sleep, 1, 88);
+        return `${first} ${second}`.trim();
+      }
+
+      function sleepTrackPath() {
+        const fractions = cycleFractions();
+        return buildPathSegment(fractions.awakeHalf, fractions.awakeHalf + fractions.sleep, 180);
+      }
+
+      function horizontalExtentOnPath(samples = 200) {
+        let maxExtent = 0;
+        for (let i = 0; i <= samples; i += 1) {
+          const pt = pointOnPath(i / samples);
+          maxExtent = Math.max(maxExtent, Math.abs(pt.x - baseLoop.cx));
+        }
+        return maxExtent;
+      }
+
       function updateFigureLayout() {
         activeGeometry = computeFigureGeometry();
-        const figure = activeGeometry;
-        upperThinTrack.setAttribute('cy', figure.upper.cy);
-        lowerThinTrack.setAttribute('cy', figure.lower.cy);
-        upperBoldTrack.setAttribute('cy', figure.upper.cy);
-        lowerBoldTrack.setAttribute('cy', figure.lower.cy);
-        upperThinTrack.setAttribute('ry', figure.upper.ry);
-        lowerThinTrack.setAttribute('ry', figure.lower.ry);
-        upperBoldTrack.setAttribute('ry', figure.upper.ry);
-        lowerBoldTrack.setAttribute('ry', figure.lower.ry);
-        upperThinTrack.setAttribute('rx', figure.upper.rx);
-        lowerThinTrack.setAttribute('rx', figure.lower.rx);
-        upperBoldTrack.setAttribute('rx', figure.upper.rx);
-        lowerBoldTrack.setAttribute('rx', figure.lower.rx);
+        const figure = currentFigureGeometry();
 
-        const sideExtent = Math.max(figure.upper.rx, figure.lower.rx);
+        const awakePath = awakeTrackPath();
+        const sleepPath = sleepTrackPath();
+        awakeThinTrack.setAttribute('d', awakePath);
+        sleepThinTrack.setAttribute('d', sleepPath);
+        awakeBoldTrack.setAttribute('d', awakePath);
+        sleepBoldTrack.setAttribute('d', sleepPath);
+
+        const sideExtent = horizontalExtentOnPath();
         midLine.setAttribute('x1', baseLoop.cx - sideExtent);
         midLine.setAttribute('x2', baseLoop.cx + sideExtent);
         midLine.setAttribute('y1', figure.midY);
