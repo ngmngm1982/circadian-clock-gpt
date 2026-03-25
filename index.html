@@ -519,7 +519,9 @@
       const minCycleHours = sleepHoursRange.min + awakeHoursRange.min;
       const maxCycleHours = sleepHoursRange.max + awakeHoursRange.max;
       const minVerticalScale = 0.68;
+      const minHorizontalScale = 0.88;
       const ratioStrength = 0.34;
+      const ratioHorizontalStrength = 0.22;
 
       const localEpoch = new Date(1970, 0, 1, 0, 0, 0, 0).getTime();
 
@@ -588,13 +590,24 @@
         return minVerticalScale + (1 - minVerticalScale) * eased;
       }
 
+      function horizontalScaleForCycle(cycleHours) {
+        const normalized = (cycleHours - minCycleHours) / (maxCycleHours - minCycleHours);
+        const eased = smoothstep01(normalized);
+        return minHorizontalScale + (1 - minHorizontalScale) * eased;
+      }
+
       function computeFigureGeometry() {
         const total = totalCycleHours();
         const verticalScale = verticalScaleForCycle(total);
+        const horizontalScale = horizontalScaleForCycle(total);
         const awakeRatio = total > 0 ? state.awakeHours / total : 0.5;
         const ratioDelta = awakeRatio - 0.5;
         const upperRatioScale = clamp(1 + ratioDelta * 2 * ratioStrength, 0.72, 1.28);
         const lowerRatioScale = clamp(1 - ratioDelta * 2 * ratioStrength, 0.72, 1.28);
+        const upperRatioXScale = clamp(1 + ratioDelta * 2 * ratioHorizontalStrength, 0.82, 1.18);
+        const lowerRatioXScale = clamp(1 - ratioDelta * 2 * ratioHorizontalStrength, 0.82, 1.18);
+        const upperRx = baseLoop.rx * horizontalScale * upperRatioXScale;
+        const lowerRx = baseLoop.rx * horizontalScale * lowerRatioXScale;
         const upperRy = baseLoop.baseRy * verticalScale * upperRatioScale;
         const lowerRy = baseLoop.baseRy * verticalScale * lowerRatioScale;
         const separation = upperRy + lowerRy;
@@ -602,8 +615,8 @@
         return {
           total,
           midY: baseLoop.centerY,
-          upper: { cx: baseLoop.cx, cy: baseLoop.centerY - separation * 0.5, rx: baseLoop.rx, ry: upperRy },
-          lower: { cx: baseLoop.cx, cy: baseLoop.centerY + separation * 0.5, rx: baseLoop.rx, ry: lowerRy },
+          upper: { cx: baseLoop.cx, cy: baseLoop.centerY - separation * 0.5, rx: upperRx, ry: upperRy },
+          lower: { cx: baseLoop.cx, cy: baseLoop.centerY + separation * 0.5, rx: lowerRx, ry: lowerRy },
         };
       }
 
@@ -744,8 +757,15 @@
         upperBoldTrack.setAttribute('rx', figure.upper.rx);
         lowerBoldTrack.setAttribute('rx', figure.lower.rx);
 
+        const sideExtent = Math.max(figure.upper.rx, figure.lower.rx);
+        midLine.setAttribute('x1', baseLoop.cx - sideExtent);
+        midLine.setAttribute('x2', baseLoop.cx + sideExtent);
         midLine.setAttribute('y1', figure.midY);
         midLine.setAttribute('y2', figure.midY);
+        label0.setAttribute('x', baseLoop.cx);
+        label12.setAttribute('x', baseLoop.cx);
+        label6.setAttribute('x', baseLoop.cx + sideExtent + 16);
+        label18.setAttribute('x', baseLoop.cx - sideExtent - 16);
         label0.setAttribute('y', figure.upper.cy - figure.upper.ry - 26);
         label6.setAttribute('y', figure.midY + 6);
         label12.setAttribute('y', figure.lower.cy + figure.lower.ry + 24);
