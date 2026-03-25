@@ -503,6 +503,7 @@
       let dragging = false;
       let dragProgressContinuous = 0;
       let dragPointerId = null;
+      let dragLastPoint = null;
       let raf = null;
 
       function load() {
@@ -564,29 +565,59 @@
         return zone === 'Awake' ? '#e8d5a3' : '#4a6fa5';
       }
 
-      function nearestProgressFromPoint(x, y, aroundProgress = null) {
-        let bestP = 0;
-        let bestU = 0;
-        let bestDistance = Infinity;
+      function distanceToPathSquared(x, y, progress) {
+        const pt = pointOnPath(progress);
+        const dx = pt.x - x;
+        const dy = pt.y - y;
+        return dx * dx + dy * dy;
+      }
+
+      function nearestProgressFromPoint(x, y, aroundProgress = null, span = 0.22) {
         const hasAround = typeof aroundProgress === 'number';
-        const steps = hasAround ? 540 : 720;
-        const span = 0.22;
-        for (let i = 0; i <= steps; i += 1) {
-          const u = hasAround
-            ? aroundProgress - span + ((2 * span) * i) / steps
-            : i / steps;
-          const p = hasAround ? wrap(u) : u;
-          const pt = pointOnPath(p);
-          const dx = pt.x - x;
-          const dy = pt.y - y;
-          const distance = dx * dx + dy * dy;
+        if (!hasAround) {
+          let bestP = 0;
+          let bestDistance = Infinity;
+          const steps = 720;
+          for (let i = 0; i <= steps; i += 1) {
+            const p = i / steps;
+            const distance = distanceToPathSquared(x, y, p);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestP = p;
+            }
+          }
+          return bestP;
+        }
+
+        const localSpan = clamp(span, 0.1, 0.24);
+        const minU = aroundProgress - localSpan;
+        const maxU = aroundProgress + localSpan;
+        const coarseSteps = 72;
+        let bestU = aroundProgress;
+        let bestDistance = Infinity;
+        for (let i = 0; i <= coarseSteps; i += 1) {
+          const u = minU + ((maxU - minU) * i) / coarseSteps;
+          const distance = distanceToPathSquared(x, y, u);
           if (distance < bestDistance) {
             bestDistance = distance;
-            bestP = p;
             bestU = u;
           }
         }
-        return hasAround ? bestU : bestP;
+
+        const coarseRadius = (maxU - minU) / coarseSteps;
+        let left = Math.max(minU, bestU - coarseRadius);
+        let right = Math.min(maxU, bestU + coarseRadius);
+        const phi = (Math.sqrt(5) - 1) / 2;
+        for (let i = 0; i < 16; i += 1) {
+          const a = right - (right - left) * phi;
+          const b = left + (right - left) * phi;
+          if (distanceToPathSquared(x, y, a) < distanceToPathSquared(x, y, b)) {
+            right = b;
+          } else {
+            left = a;
+          }
+        }
+        return (left + right) / 2;
       }
 
       function svgPointFromClient(clientX, clientY) {
@@ -657,18 +688,28 @@
 
       function onDragStart(event) {
         if (dragging) return;
+        event.preventDefault();
+        const startPt = svgPointFromClient(event.clientX, event.clientY);
         dragging = true;
         dragPointerId = event.pointerId;
         dragProgressContinuous = state.zeroProgress;
-        svg.setPointerCapture(event.pointerId);
+        dragLastPoint = startPt;
+        try { svg.setPointerCapture(event.pointerId); } catch (_) {}
         onDragMove(event);
       }
 
       function onDragMove(event) {
         if (!dragging || event.pointerId !== dragPointerId) return;
+        event.preventDefault();
         const pt = svgPointFromClient(event.clientX, event.clientY);
-        const target = nearestProgressFromPoint(pt.x, pt.y, dragProgressContinuous);
-        dragProgressContinuous = target;
+        const lastPt = dragLastPoint || pt;
+        const moveDistance = Math.hypot(pt.x - lastPt.x, pt.y - lastPt.y);
+        const searchSpan = clamp(0.12 + moveDistance * 0.0032, 0.12, 0.24);
+        const target = nearestProgressFromPoint(pt.x, pt.y, dragProgressContinuous, searchSpan);
+        const delta = target - dragProgressContinuous;
+        const maxDelta = clamp(0.05 + moveDistance * 0.0045, 0.05, 0.2);
+        dragProgressContinuous += clamp(delta, -maxDelta, maxDelta);
+        dragLastPoint = pt;
         state.zeroProgress = wrap(dragProgressContinuous);
         updateStatic();
         save();
@@ -678,6 +719,7 @@
         if (!dragging || event.pointerId !== dragPointerId) return;
         dragging = false;
         dragPointerId = null;
+        dragLastPoint = null;
         try { svg.releasePointerCapture(event.pointerId); } catch (_) {}
       }
 
@@ -703,7 +745,6 @@
       svg.addEventListener('pointermove', onDragMove);
       svg.addEventListener('pointerup', onDragEnd);
       svg.addEventListener('pointercancel', onDragEnd);
-      svg.addEventListener('pointerleave', onDragEnd);
 
       sheetHeader.addEventListener('click', toggleSheet);
       sheetHeader.addEventListener('keydown', (event) => {
