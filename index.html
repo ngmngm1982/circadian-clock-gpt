@@ -584,6 +584,13 @@
         return state.sleepHours + state.awakeHours;
       }
 
+      function cycleFractions() {
+        const total = totalCycleHours();
+        const awake = total > 0 ? clamp(state.awakeHours / total, 0.2, 0.85) : 0.5;
+        const sleep = 1 - awake;
+        return { awake, sleep, awakeHalf: awake * 0.5 };
+      }
+
       function verticalScaleForCycle(cycleHours) {
         const normalized = (cycleHours - minCycleHours) / (maxCycleHours - minCycleHours);
         const eased = smoothstep01(normalized);
@@ -635,22 +642,24 @@
 
       function pointOnPath(progress) {
         const figure = currentFigureGeometry();
+        const fractions = cycleFractions();
         const p = wrap(progress);
-        if (p < 0.25) {
-          const t = p / 0.25;
+        if (p < fractions.awakeHalf) {
+          const t = p / fractions.awakeHalf;
           return pointOnLoop(figure.upper, -90 - t * 180);
         }
-        if (p < 0.75) {
-          const t = (p - 0.25) / 0.5;
+        if (p < fractions.awakeHalf + fractions.sleep) {
+          const t = (p - fractions.awakeHalf) / fractions.sleep;
           return pointOnLoop(figure.lower, -90 + t * 360);
         }
-        const t = (p - 0.75) / 0.25;
+        const t = (p - (fractions.awakeHalf + fractions.sleep)) / fractions.awakeHalf;
         return pointOnLoop(figure.upper, 90 - t * 180);
       }
 
       function zoneForProgress(progress) {
+        const fractions = cycleFractions();
         const p = wrap(progress);
-        return p < 0.25 || p >= 0.75 ? 'Awake' : 'Sleep';
+        return p < fractions.awakeHalf || p >= fractions.awakeHalf + fractions.sleep ? 'Awake' : 'Sleep';
       }
 
       function colorForProgress(progress) {
