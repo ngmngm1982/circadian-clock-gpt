@@ -567,21 +567,21 @@
       function nearestProgressFromPoint(x, y, aroundProgress = null) {
         let bestP = 0;
         let bestU = 0;
-        let bestScore = Infinity;
+        let bestDistance = Infinity;
         const hasAround = typeof aroundProgress === 'number';
-        const steps = 720;
-        const continuityWeight = 2400;
+        const steps = hasAround ? 540 : 720;
+        const span = 0.34;
         for (let i = 0; i <= steps; i += 1) {
-          const p = i / steps;
-          const u = hasAround ? p + Math.round(aroundProgress - p) : p;
+          const u = hasAround
+            ? aroundProgress - span + ((2 * span) * i) / steps
+            : i / steps;
+          const p = hasAround ? wrap(u) : u;
           const pt = pointOnPath(p);
           const dx = pt.x - x;
           const dy = pt.y - y;
-          const distanceScore = dx * dx + dy * dy;
-          const continuityPenalty = hasAround ? (u - aroundProgress) * (u - aroundProgress) : 0;
-          const score = distanceScore + continuityPenalty * continuityWeight;
-          if (score < bestScore) {
-            bestScore = score;
+          const distance = dx * dx + dy * dy;
+          if (distance < bestDistance) {
+            bestDistance = distance;
             bestP = p;
             bestU = u;
           }
