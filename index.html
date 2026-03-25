@@ -508,7 +508,7 @@
       const verticalScaleRange = { min: 1.02, max: 1.3 };
       const horizontalScaleRange = { min: 1.02, max: 1.14 };
       const ratioStrength = 0.42;
-      const ratioHorizontalStrength = 0.18;
+      const ratioHorizontalStrength = 0.16;
       const displayFit = { x: 1.12, y: 1.28, yOffset: -18 };
 
       const localEpoch = new Date(1970, 0, 1, 0, 0, 0, 0).getTime();
@@ -599,14 +599,17 @@
         const lowerRatioXScale = clamp(1 - ratioDelta * 2 * ratioHorizontalStrength, 0.82, 1.18);
         const upperRx = baseLoop.rx * horizontalScale * upperRatioXScale;
         const lowerRx = baseLoop.rx * horizontalScale * lowerRatioXScale;
-        const upperRy = baseLoop.baseRy * verticalScale * upperRatioScale;
-        const lowerRy = baseLoop.baseRy * verticalScale * lowerRatioScale;
+        const baseVertical = baseLoop.baseRy * verticalScale;
+        const upperRy = baseVertical * upperRatioScale;
+        const lowerRy = baseVertical * lowerRatioScale;
         const separation = upperRy + lowerRy;
-        const midY = baseLoop.centerY + ratioDelta * 14;
+        const ratioBalance = (upperRy - lowerRy) / Math.max(upperRy + lowerRy, 1e-6);
+        const midY = baseLoop.centerY + ratioBalance * 9;
 
         return {
           total,
           midY,
+          ratioBalance,
           upper: { cx: baseLoop.cx, cy: midY - separation * 0.5, rx: upperRx, ry: upperRy },
           lower: { cx: baseLoop.cx, cy: midY + separation * 0.5, rx: lowerRx, ry: lowerRy },
         };
@@ -644,9 +647,12 @@
         const xTerm = 2.62 * h * v * neckPinch * sideBulge;
         const rawX = baseLoop.cx + rx * xTerm;
         const rawY = figure.midY - v * ry;
+        const fitX = displayFit.x * (1 - Math.abs(figure.ratioBalance) * 0.04);
+        const fitY = displayFit.y * (1 - figure.ratioBalance * 0.18);
+        const fitYOffset = displayFit.yOffset + figure.ratioBalance * 10;
         return {
-          x: baseLoop.cx + (rawX - baseLoop.cx) * displayFit.x,
-          y: baseLoop.centerY + (rawY - baseLoop.centerY) * displayFit.y + displayFit.yOffset,
+          x: baseLoop.cx + (rawX - baseLoop.cx) * fitX,
+          y: baseLoop.centerY + (rawY - baseLoop.centerY) * fitY + fitYOffset,
         };
       }
 
