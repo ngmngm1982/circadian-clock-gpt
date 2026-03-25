@@ -526,6 +526,8 @@
       let dragLastPoint = null;
       let dragTravelDirection = 0;
       let activeGeometry = null;
+      let runtimeFit = { scale: 1, yShift: 0 };
+      let fitDirty = true;
       let raf = null;
 
       function load() {
@@ -708,7 +710,7 @@
         };
       }
 
-      function pointAtPhase(phase) {
+      function basePointAtPhase(phase) {
         const figure = currentFigureGeometry();
         const raw = rawPointAtPhase(phase, figure);
         const normalizedX = baseLoop.cx + (raw.x - baseLoop.cx) * figure.normalizeX;
@@ -716,6 +718,61 @@
         return {
           x: baseLoop.cx + (normalizedX - baseLoop.cx) * displayFit.x,
           y: baseLoop.centerY + (normalizedY - baseLoop.centerY) * displayFit.y + displayFit.yOffset,
+        };
+      }
+
+      function basePointOnPath(progress) {
+        return basePointAtPhase(phaseForProgress(progress));
+      }
+
+      function measureBasePathBounds(samples = 360) {
+        let minY = Infinity;
+        let maxY = -Infinity;
+        for (let i = 0; i <= samples; i += 1) {
+          const pt = basePointOnPath(i / samples);
+          if (pt.y < minY) minY = pt.y;
+          if (pt.y > maxY) maxY = pt.y;
+        }
+        return { minY, maxY };
+      }
+
+      function isPhonePortrait() {
+        return window.matchMedia('(max-width: 700px) and (orientation: portrait)').matches;
+      }
+
+      function updateRuntimeFit() {
+        const vb = svg.viewBox.baseVal;
+        const rect = svg.getBoundingClientRect();
+        const pxToVbY = vb.height / Math.max(rect.height, 1);
+        const portrait = isPhonePortrait();
+        const topSafety = (portrait ? 42 : 26) * pxToVbY;
+        const bottomSafety = (portrait ? 16 : 12) * pxToVbY;
+
+        const bounds = measureBasePathBounds();
+        const topPoint = basePointOnPath(0);
+        const topCritical = Math.min(bounds.minY - 22, topPoint.y - 38);
+        const bottomCritical = bounds.maxY + 22;
+        const criticalSpan = bottomCritical - topCritical;
+        const availableSpan = vb.height - topSafety - bottomSafety;
+        const scale = Math.min(1, availableSpan / Math.max(criticalSpan, 1e-6));
+
+        const centerY = baseLoop.centerY;
+        const scaledTop = centerY + (topCritical - centerY) * scale;
+        const scaledBottom = centerY + (bottomCritical - centerY) * scale;
+        let yShift = 0;
+        if (scaledTop < topSafety) yShift += topSafety - scaledTop;
+        if (scaledBottom + yShift > vb.height - bottomSafety) {
+          yShift -= (scaledBottom + yShift) - (vb.height - bottomSafety);
+        }
+        runtimeFit = { scale, yShift };
+        fitDirty = false;
+      }
+
+      function pointAtPhase(phase) {
+        const base = basePointAtPhase(phase);
+        return {
+          x: baseLoop.cx + (base.x - baseLoop.cx) * runtimeFit.scale,
+          y: baseLoop.centerY + (base.y - baseLoop.centerY) * runtimeFit.scale + runtimeFit.yShift,
         };
       }
 
@@ -893,6 +950,7 @@
       }
 
       function updateStatic() {
+        if (fitDirty) updateRuntimeFit();
         const total = totalCycleHours();
         updateFigureLayout();
         updateDialLabels();
@@ -1002,12 +1060,14 @@
 
       sleepSlider.addEventListener('input', () => {
         state.sleepHours = clamp(parseFloat(sleepSlider.value), sleepHoursRange.min, sleepHoursRange.max);
+        fitDirty = true;
         updateStatic();
         save();
       });
 
       awakeSlider.addEventListener('input', () => {
         state.awakeHours = clamp(parseFloat(awakeSlider.value), awakeHoursRange.min, awakeHoursRange.max);
+        fitDirty = true;
         updateStatic();
         save();
       });
@@ -1036,6 +1096,21 @@
         }
         if (!document.hidden && !raf) render();
       });
+
+      window.addEventListener('resize', () => {
+        fitDirty = true;
+        updateStatic();
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+          fitDirty = true;
+          updateStatic();
+        });
+        window.visualViewport.addEventListener('scroll', () => {
+          fitDirty = true;
+          updateStatic();
+        });
+      }
     })();
   </script>
 </body>
