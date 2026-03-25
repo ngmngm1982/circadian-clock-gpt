@@ -501,7 +501,8 @@
         lower: { cx: 180, cy: 456, r: 118 },
       };
       const figureCenterY = (geometry.upper.cy + geometry.lower.cy) * 0.5;
-      const baseCycleHours = 24;
+      const minCycleHours = 15;
+      const maxCycleHours = 30;
       const minVerticalScale = 0.68;
       const labelBaseY = { h0: 76, h6: 344, h12: 598, h18: 344 };
 
@@ -554,14 +555,9 @@
       }
 
       function verticalScaleForCycle(cycleHours) {
-        let normalizedDistance = 0;
-        if (cycleHours < baseCycleHours) {
-          normalizedDistance = (baseCycleHours - cycleHours) / (baseCycleHours - 15);
-        } else if (cycleHours > baseCycleHours) {
-          normalizedDistance = (cycleHours - baseCycleHours) / (30 - baseCycleHours);
-        }
-        const eased = smoothstep01(normalizedDistance);
-        return 1 - (1 - minVerticalScale) * eased;
+        const normalized = (cycleHours - minCycleHours) / (maxCycleHours - minCycleHours);
+        const eased = smoothstep01(normalized);
+        return minVerticalScale + (1 - minVerticalScale) * eased;
       }
 
       function scaleFigureY(y) {
