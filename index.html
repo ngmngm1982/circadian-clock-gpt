@@ -505,11 +505,11 @@
       };
       const minCycleHours = sleepHoursRange.min + awakeHoursRange.min;
       const maxCycleHours = sleepHoursRange.max + awakeHoursRange.max;
-      const verticalScaleRange = { min: 1.02, max: 1.3 };
-      const horizontalScaleRange = { min: 1.02, max: 1.14 };
+      const verticalScaleRange = { min: 1.04, max: 1.34 };
+      const horizontalScaleRange = { min: 0.98, max: 1.06 };
       const ratioStrength = 0.52;
-      const ratioHorizontalStrength = 0.18;
-      const displayFit = { x: 1.2, y: 1.38, yOffset: -28 };
+      const ratioHorizontalStrength = 0.12;
+      const displayFit = { x: 1.12, y: 1.48, yOffset: -32 };
 
       const localEpoch = new Date(1970, 0, 1, 0, 0, 0, 0).getTime();
 
@@ -602,8 +602,8 @@
         const upperRatioScale = upperRatioRaw / ratioMean;
         const lowerRatioScale = lowerRatioRaw / ratioMean;
 
-        const upperRatioXRaw = clamp(1 + ratioInfluence * ratioHorizontalStrength, 0.88, 1.2);
-        const lowerRatioXRaw = clamp(1 - ratioInfluence * (ratioHorizontalStrength * 0.56), 0.9, 1.14);
+        const upperRatioXRaw = clamp(1 + ratioInfluence * ratioHorizontalStrength, 0.92, 1.12);
+        const lowerRatioXRaw = clamp(1 - ratioInfluence * (ratioHorizontalStrength * 0.56), 0.94, 1.1);
         const ratioXMean = (upperRatioXRaw + lowerRatioXRaw) * 0.5;
         const upperRatioXScale = upperRatioXRaw / ratioXMean;
         const lowerRatioXScale = lowerRatioXRaw / ratioXMean;
@@ -614,7 +614,7 @@
         const lowerRy = baseVertical * lowerRatioScale;
         const separation = upperRy + lowerRy;
         const ratioBalance = (upperRy - lowerRy) / Math.max(upperRy + lowerRy, 1e-6);
-        const midY = baseLoop.centerY + ratioBalance * 12;
+        const midY = baseLoop.centerY + ratioBalance * 10;
 
         const figure = {
           total,
@@ -674,12 +674,16 @@
         const topBlend = smoothstep01((v + 1) * 0.5);
         const rx = figure.lower.rx + (figure.upper.rx - figure.lower.rx) * topBlend;
         const ry = figure.lower.ry + (figure.upper.ry - figure.lower.ry) * topBlend;
-        const centerSpread = 0.92 + 0.2 * (1 - v * v);
-        const topBottomSettle = 0.95 + 0.1 * (v * v);
-        const xTerm = 2.7 * h * v * centerSpread * topBottomSettle;
+        const absV = Math.abs(v);
+        const neckEase = Math.pow(absV, 0.82);
+        const shoulderFullness = 0.94 + 0.2 * (1 - absV * absV);
+        const topTaper = 1 - 0.14 * topBlend;
+        const bottomRoundness = 0.98 + 0.1 * (1 - topBlend);
+        const xTerm = 2.56 * h * v * neckEase * shoulderFullness * topTaper * bottomRoundness;
+        const yStretch = 0.94 + 0.12 * topBlend;
         return {
           x: baseLoop.cx + rx * xTerm,
-          y: figure.midY - v * ry,
+          y: figure.midY - (v * yStretch) * ry,
         };
       }
 
