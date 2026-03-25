@@ -675,18 +675,18 @@
         const t = phase + Math.PI * 0.5;
         const s = Math.sin(t);
         const c = Math.cos(t);
-        const lobe = Math.sin(2 * t - 0.22);
-        const shoulder = Math.sin(3 * t - 0.55);
-        const yAnalemma = 0.86 * lobe + 0.46 * s + 0.07 * s * s - 0.015;
+        const lobe = Math.sin(2 * t - 0.37);
+        const shoulder = Math.sin(3 * t - 0.44);
+        const yAnalemma = 0.825 * lobe + 0.558 * s + 0.042 * s * s - 0.002;
         const topBlend = smoothstep01((yAnalemma + 1.22) / 2.44);
         const rx = figure.lower.rx + (figure.upper.rx - figure.lower.rx) * topBlend;
         const ry = figure.lower.ry + (figure.upper.ry - figure.lower.ry) * topBlend;
-        const xAnalemma = 1.1 * (s * c) + 0.3 * shoulder - 0.02 * s;
-        const neckNarrow = 0.66 + 0.34 * clamp(Math.abs(yAnalemma), 0, 1);
-        const topUpright = 1 - 0.1 * topBlend;
-        const lowerRound = 0.99 + 0.12 * (1 - topBlend);
-        const xTerm = 1.62 * xAnalemma * neckNarrow * topUpright * lowerRound;
-        const yTerm = yAnalemma * (0.93 + 0.08 * topBlend);
+        const xAnalemma = 1.072 * (s * c) + 0.204 * shoulder + 0.015 * s;
+        const neckNarrow = 0.662 + 0.275 * clamp(Math.abs(yAnalemma), 0, 1);
+        const topUpright = 1 - 0.133 * topBlend;
+        const lowerRound = 0.996 + 0.12 * (1 - topBlend);
+        const xTerm = 1.543 * xAnalemma * neckNarrow * topUpright * lowerRound;
+        const yTerm = yAnalemma * (0.899 + 0.03 * topBlend);
         return {
           x: baseLoop.cx + rx * xTerm,
           y: figure.midY - yTerm * ry,
