@@ -382,24 +382,24 @@
         </defs>
 
         <g opacity="0.2">
-          <circle cx="180" cy="220" r="118" fill="none" stroke="url(#goldStroke)" stroke-width="1.5" />
-          <circle cx="180" cy="456" r="118" fill="none" stroke="url(#blueStroke)" stroke-width="1.5" />
+          <ellipse id="upperThinTrack" cx="180" cy="220" rx="118" ry="118" fill="none" stroke="url(#goldStroke)" stroke-width="1.5" />
+          <ellipse id="lowerThinTrack" cx="180" cy="456" rx="118" ry="118" fill="none" stroke="url(#blueStroke)" stroke-width="1.5" />
         </g>
 
         <g opacity="0.85">
-          <circle cx="180" cy="220" r="118" fill="none" stroke="url(#goldStroke)" stroke-width="10" stroke-linecap="round" filter="url(#softGlow)" />
-          <circle cx="180" cy="456" r="118" fill="none" stroke="url(#blueStroke)" stroke-width="10" stroke-linecap="round" filter="url(#softGlow)" />
+          <ellipse id="upperBoldTrack" cx="180" cy="220" rx="118" ry="118" fill="none" stroke="url(#goldStroke)" stroke-width="10" stroke-linecap="round" filter="url(#softGlow)" />
+          <ellipse id="lowerBoldTrack" cx="180" cy="456" rx="118" ry="118" fill="none" stroke="url(#blueStroke)" stroke-width="10" stroke-linecap="round" filter="url(#softGlow)" />
         </g>
 
         <g opacity="0.3">
-          <line x1="64" y1="338" x2="296" y2="338" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
+          <line id="midLine" x1="64" y1="338" x2="296" y2="338" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
         </g>
 
         <g id="labels" font-family="JetBrains Mono, monospace" font-size="13" fill="rgba(255,255,255,0.65)">
-          <text x="180" y="76" text-anchor="middle">0</text>
-          <text x="314" y="344" text-anchor="middle">6</text>
-          <text x="180" y="598" text-anchor="middle">12</text>
-          <text x="46" y="344" text-anchor="middle">18</text>
+          <text id="label0" x="180" y="76" text-anchor="middle">0</text>
+          <text id="label6" x="314" y="344" text-anchor="middle">6</text>
+          <text id="label12" x="180" y="598" text-anchor="middle">12</text>
+          <text id="label18" x="46" y="344" text-anchor="middle">18</text>
         </g>
 
         <g id="markers">
@@ -486,11 +486,24 @@
       const sheet = document.getElementById('sheet');
       const sheetHeader = document.getElementById('sheetHeader');
       const sheetToggle = document.getElementById('sheetToggle');
+      const upperThinTrack = document.getElementById('upperThinTrack');
+      const lowerThinTrack = document.getElementById('lowerThinTrack');
+      const upperBoldTrack = document.getElementById('upperBoldTrack');
+      const lowerBoldTrack = document.getElementById('lowerBoldTrack');
+      const midLine = document.getElementById('midLine');
+      const label0 = document.getElementById('label0');
+      const label6 = document.getElementById('label6');
+      const label12 = document.getElementById('label12');
+      const label18 = document.getElementById('label18');
 
       const geometry = {
         upper: { cx: 180, cy: 220, r: 118 },
         lower: { cx: 180, cy: 456, r: 118 },
       };
+      const figureCenterY = (geometry.upper.cy + geometry.lower.cy) * 0.5;
+      const baseCycleHours = 24;
+      const minVerticalScale = 0.68;
+      const labelBaseY = { h0: 76, h6: 344, h12: 598, h18: 344 };
 
       const localEpoch = new Date(1970, 0, 1, 0, 0, 0, 0).getTime();
 
@@ -505,6 +518,7 @@
       let dragPointerId = null;
       let dragLastPoint = null;
       let dragTravelDirection = 0;
+      let figureVerticalScale = 1;
       let raf = null;
 
       function load() {
@@ -534,6 +548,26 @@
         return (deg * Math.PI) / 180;
       }
 
+      function smoothstep01(value) {
+        const t = clamp(value, 0, 1);
+        return t * t * (3 - 2 * t);
+      }
+
+      function verticalScaleForCycle(cycleHours) {
+        let normalizedDistance = 0;
+        if (cycleHours < baseCycleHours) {
+          normalizedDistance = (baseCycleHours - cycleHours) / (baseCycleHours - 15);
+        } else if (cycleHours > baseCycleHours) {
+          normalizedDistance = (cycleHours - baseCycleHours) / (30 - baseCycleHours);
+        }
+        const eased = smoothstep01(normalizedDistance);
+        return 1 - (1 - minVerticalScale) * eased;
+      }
+
+      function scaleFigureY(y) {
+        return figureCenterY + (y - figureCenterY) * figureVerticalScale;
+      }
+
       function pointOnCircle(circle, deg) {
         const a = toRad(deg);
         return {
@@ -546,14 +580,17 @@
         const p = wrap(progress);
         if (p < 0.25) {
           const t = p / 0.25;
-          return pointOnCircle(geometry.upper, -90 - t * 180);
+          const basePoint = pointOnCircle(geometry.upper, -90 - t * 180);
+          return { x: basePoint.x, y: scaleFigureY(basePoint.y) };
         }
         if (p < 0.75) {
           const t = (p - 0.25) / 0.5;
-          return pointOnCircle(geometry.lower, -90 + t * 360);
+          const basePoint = pointOnCircle(geometry.lower, -90 + t * 360);
+          return { x: basePoint.x, y: scaleFigureY(basePoint.y) };
         }
         const t = (p - 0.75) / 0.25;
-        return pointOnCircle(geometry.upper, 90 - t * 180);
+        const basePoint = pointOnCircle(geometry.upper, 90 - t * 180);
+        return { x: basePoint.x, y: scaleFigureY(basePoint.y) };
       }
 
       function zoneForProgress(progress) {
@@ -649,7 +686,32 @@
         sheetHeader.setAttribute('aria-expanded', String(state.sheetOpen));
       }
 
+      function updateFigureLayout() {
+        figureVerticalScale = verticalScaleForCycle(state.cycleHours);
+
+        const upperCy = scaleFigureY(geometry.upper.cy);
+        const lowerCy = scaleFigureY(geometry.lower.cy);
+        const ry = geometry.upper.r * figureVerticalScale;
+        upperThinTrack.setAttribute('cy', upperCy);
+        lowerThinTrack.setAttribute('cy', lowerCy);
+        upperBoldTrack.setAttribute('cy', upperCy);
+        lowerBoldTrack.setAttribute('cy', lowerCy);
+        upperThinTrack.setAttribute('ry', ry);
+        lowerThinTrack.setAttribute('ry', ry);
+        upperBoldTrack.setAttribute('ry', ry);
+        lowerBoldTrack.setAttribute('ry', ry);
+
+        const midY = scaleFigureY(338);
+        midLine.setAttribute('y1', midY);
+        midLine.setAttribute('y2', midY);
+        label0.setAttribute('y', scaleFigureY(labelBaseY.h0));
+        label6.setAttribute('y', scaleFigureY(labelBaseY.h6));
+        label12.setAttribute('y', scaleFigureY(labelBaseY.h12));
+        label18.setAttribute('y', scaleFigureY(labelBaseY.h18));
+      }
+
       function updateStatic() {
+        updateFigureLayout();
         cycleSlider.value = String(state.cycleHours);
         cycleReadout.textContent = `${state.cycleHours.toFixed(1)} h cycle`;
         cycleSliderReadout.textContent = `${state.cycleHours.toFixed(1)}h`;
