@@ -530,6 +530,7 @@
       let dragTravelDirection = 0;
       let activeGeometry = null;
       let runtimeFit = { scale: 1, xShift: 0, yShift: 0 };
+      let runtimeFitMetrics = null;
       let fitDirty = true;
       let raf = null;
       let lastLayoutWidth = Math.round(window.innerWidth || 0);
@@ -775,6 +776,7 @@
         const pxToVbY = vb.height / Math.max(rect.height, 1);
         const pxToVbX = vb.width / Math.max(rect.width, 1);
         const portrait = isPhonePortrait();
+        const iPhonePortrait = portrait && /iPhone/.test(navigator.userAgent);
 
         // Derive effective top/bottom limits from real overlay layout, not constants only.
         let topLimitPx = rect.top + (portrait ? 12 : 10);
@@ -840,9 +842,55 @@
         const targetCy = (topLimit + bottomLimit) * 0.5;
         let xShift = targetCx - scaledCx;
         xShift = clampXShiftToLimits(xShift);
-        const centeredBounds = measureFittedBoundsX(xShift);
-        xShift += targetCx - ((centeredBounds.minX + centeredBounds.maxX) * 0.5);
-        xShift = clampXShiftToLimits(xShift);
+        if (iPhonePortrait) {
+          const viewportCenterClientX = window.visualViewport
+            ? window.visualViewport.offsetLeft + (window.visualViewport.width * 0.5)
+            : (window.innerWidth * 0.5);
+          const viewportCenterVbX = vb.x + (viewportCenterClientX - rect.left) * pxToVbX;
+          const beforeBounds = measureFittedBoundsX(xShift, 360);
+          const bboxCenterBefore = (beforeBounds.minX + beforeBounds.maxX) * 0.5;
+          const viewportDeltaX = viewportCenterVbX - bboxCenterBefore;
+
+          // iPhone portrait: cancel measured center deviation directly.
+          const forcedXShift = xShift + viewportDeltaX;
+          xShift = forcedXShift;
+
+          const overflowChecked = measureFittedBoundsX(xShift, 360);
+          if (overflowChecked.minX < leftLimit || overflowChecked.maxX > rightLimit) {
+            xShift = clampXShiftToLimits(xShift);
+          }
+          const afterBounds = measureFittedBoundsX(xShift, 360);
+          const bboxCenterAfter = (afterBounds.minX + afterBounds.maxX) * 0.5;
+          const residualDeltaX = viewportCenterVbX - bboxCenterAfter;
+          runtimeFitMetrics = {
+            mode: 'iphone_forced_xshift',
+            viewportCenterX: viewportCenterVbX,
+            bboxMinX: afterBounds.minX,
+            bboxMaxX: afterBounds.maxX,
+            bboxCenterX: bboxCenterAfter,
+            deltaBefore: viewportDeltaX,
+            deltaAfter: residualDeltaX,
+            xShift,
+            scale,
+          };
+        } else {
+          const centeredBounds = measureFittedBoundsX(xShift);
+          xShift += targetCx - ((centeredBounds.minX + centeredBounds.maxX) * 0.5);
+          xShift = clampXShiftToLimits(xShift);
+          const afterBounds = measureFittedBoundsX(xShift, 260);
+          runtimeFitMetrics = {
+            mode: 'default_centered',
+            viewportCenterX: targetCx,
+            bboxMinX: afterBounds.minX,
+            bboxMaxX: afterBounds.maxX,
+            bboxCenterX: (afterBounds.minX + afterBounds.maxX) * 0.5,
+            deltaBefore: targetCx - scaledCx,
+            deltaAfter: targetCx - ((afterBounds.minX + afterBounds.maxX) * 0.5),
+            xShift,
+            scale,
+          };
+        }
+        window.__clockRuntimeFitMetrics = runtimeFitMetrics;
         let yShift = targetCy - scaledCy;
         if (scaledTop < topLimit) yShift += topLimit - scaledTop;
         if (scaledBottom + yShift > bottomLimit) {
