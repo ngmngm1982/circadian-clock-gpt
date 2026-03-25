@@ -510,6 +510,8 @@
       const ratioStrength = 0.52;
       const ratioHorizontalStrength = 0.12;
       const displayFit = { x: 1.12, y: 1.48, yOffset: -32 };
+      const ANA_TOP_PHASE_SHIFT = 172 / 365; // Around June solstice; keeps p=0 near top lobe.
+      const ANA_EQTIME_NORMALIZER_MIN = 16; // +/-16 min is a practical horizontal normalization.
 
       const localEpoch = new Date(1970, 0, 1, 0, 0, 0, 0).getTime();
 
@@ -671,24 +673,26 @@
       }
 
       function rawPointAtPhase(phase, figure) {
-        // Analemma-inspired unit curve (single continuous path, asymmetric lobes).
-        const t = phase + Math.PI * 0.5;
-        const s = Math.sin(t);
-        const c = Math.cos(t);
-        const lobe = Math.sin(2 * t - 0.37);
-        const shoulder = Math.sin(3 * t - 0.44);
-        const yAnalemma = 0.825 * lobe + 0.558 * s + 0.042 * s * s - 0.002;
-        const topBlend = smoothstep01((yAnalemma + 1.22) / 2.44);
+        // Solar analemma approximation (equation of time + declination).
+        // This yields the characteristic non-symmetric figure-eight.
+        const yearPhase = wrap((phase / (Math.PI * 2)) + ANA_TOP_PHASE_SHIFT);
+        const dayOfYear = yearPhase * 365;
+        const B = (2 * Math.PI / 364) * (dayOfYear - 81);
+        const equationMinutes =
+          9.87 * Math.sin(2 * B) -
+          7.53 * Math.cos(B) -
+          1.5 * Math.sin(B);
+        const declinationDeg = 23.45 * Math.sin((2 * Math.PI / 365) * (dayOfYear - 81));
+
+        const xAnalemma = clamp(equationMinutes / ANA_EQTIME_NORMALIZER_MIN, -1.25, 1.25);
+        const yAnalemma = clamp(declinationDeg / 23.45, -1.05, 1.05);
+        const topBlend = smoothstep01((yAnalemma + 1) * 0.5);
         const rx = figure.lower.rx + (figure.upper.rx - figure.lower.rx) * topBlend;
         const ry = figure.lower.ry + (figure.upper.ry - figure.lower.ry) * topBlend;
-        const xAnalemma = 1.072 * (s * c) + 0.204 * shoulder + 0.015 * s;
-        const neckNarrow = 0.662 + 0.275 * clamp(Math.abs(yAnalemma), 0, 1);
-        const topUpright = 1 - 0.133 * topBlend;
-        const lowerRound = 0.996 + 0.12 * (1 - topBlend);
-        const xTerm = 1.543 * xAnalemma * neckNarrow * topUpright * lowerRound;
-        const yTerm = yAnalemma * (0.899 + 0.03 * topBlend);
+        const xTerm = xAnalemma;
+        const yTerm = yAnalemma;
         return {
-          x: baseLoop.cx + rx * xTerm,
+          x: baseLoop.cx + rx * xTerm * 0.98,
           y: figure.midY - yTerm * ry,
         };
       }
