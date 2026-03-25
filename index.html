@@ -529,7 +529,7 @@
       let dragLastPoint = null;
       let dragTravelDirection = 0;
       let activeGeometry = null;
-      let runtimeFit = { scale: 1, yShift: 0 };
+      let runtimeFit = { scale: 1, xShift: 0, yShift: 0 };
       let fitDirty = true;
       let raf = null;
 
@@ -737,14 +737,18 @@
       }
 
       function measureBasePathBounds(samples = 360) {
+        let minX = Infinity;
+        let maxX = -Infinity;
         let minY = Infinity;
         let maxY = -Infinity;
         for (let i = 0; i <= samples; i += 1) {
           const pt = basePointOnPath(i / samples);
+          if (pt.x < minX) minX = pt.x;
+          if (pt.x > maxX) maxX = pt.x;
           if (pt.y < minY) minY = pt.y;
           if (pt.y > maxY) maxY = pt.y;
         }
-        return { minY, maxY };
+        return { minX, maxX, minY, maxY };
       }
 
       function isPhonePortrait() {
@@ -755,6 +759,7 @@
         const vb = svg.viewBox.baseVal;
         const rect = svg.getBoundingClientRect();
         const pxToVbY = vb.height / Math.max(rect.height, 1);
+        const pxToVbX = vb.width / Math.max(rect.width, 1);
         const portrait = isPhonePortrait();
 
         // Derive effective top/bottom limits from real overlay layout, not constants only.
@@ -773,31 +778,48 @@
         }
         const topLimit = vb.y + (topLimitPx - rect.top) * pxToVbY;
         const bottomLimit = vb.y + (bottomLimitPx - rect.top) * pxToVbY;
+        const sidePadPx = portrait ? 12 : 10;
+        const leftLimit = vb.x + sidePadPx * pxToVbX;
+        const rightLimit = vb.x + vb.width - sidePadPx * pxToVbX;
 
         const bounds = measureBasePathBounds();
         const topPoint = basePointOnPath(0);
+        const leftCritical = bounds.minX - 12;
+        const rightCritical = bounds.maxX + 12;
         const topCritical = Math.min(bounds.minY - 22, topPoint.y - 38);
         const bottomCritical = bounds.maxY + 24;
+        const criticalWidth = rightCritical - leftCritical;
         const criticalSpan = bottomCritical - topCritical;
         const availableSpan = bottomLimit - topLimit;
-        const scale = Math.min(1, availableSpan / Math.max(criticalSpan, 1e-6));
+        const availableWidth = rightLimit - leftLimit;
+        const scaleY = availableSpan / Math.max(criticalSpan, 1e-6);
+        const scaleX = availableWidth / Math.max(criticalWidth, 1e-6);
+        const scale = Math.min(1, scaleX, scaleY);
 
         const centerY = baseLoop.centerY;
+        const centerX = baseLoop.cx;
+        const scaledLeft = centerX + (leftCritical - centerX) * scale;
+        const scaledRight = centerX + (rightCritical - centerX) * scale;
         const scaledTop = centerY + (topCritical - centerY) * scale;
         const scaledBottom = centerY + (bottomCritical - centerY) * scale;
+        let xShift = 0;
         let yShift = 0;
+        if (scaledLeft < leftLimit) xShift += leftLimit - scaledLeft;
+        if (scaledRight + xShift > rightLimit) {
+          xShift -= (scaledRight + xShift) - rightLimit;
+        }
         if (scaledTop < topLimit) yShift += topLimit - scaledTop;
         if (scaledBottom + yShift > bottomLimit) {
           yShift -= (scaledBottom + yShift) - bottomLimit;
         }
-        runtimeFit = { scale, yShift };
+        runtimeFit = { scale, xShift, yShift };
         fitDirty = false;
       }
 
       function pointAtPhase(phase) {
         const base = basePointAtPhase(phase);
         return {
-          x: baseLoop.cx + (base.x - baseLoop.cx) * runtimeFit.scale,
+          x: baseLoop.cx + (base.x - baseLoop.cx) * runtimeFit.scale + runtimeFit.xShift,
           y: baseLoop.centerY + (base.y - baseLoop.centerY) * runtimeFit.scale + runtimeFit.yShift,
         };
       }
