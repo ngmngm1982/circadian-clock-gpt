@@ -435,7 +435,6 @@
           <span>現在時刻</span>
           <span class="metric" id="clockReadout">--:--:--</span>
         </div>
-        <div class="valueBig" id="phaseReadout">0.0%</div>
       </div>
 
       <div class="row">
@@ -479,7 +478,6 @@
       const cycleReadout = document.getElementById('cycleReadout');
       const cycleSliderReadout = document.getElementById('cycleSliderReadout');
       const clockReadout = document.getElementById('clockReadout');
-      const phaseReadout = document.getElementById('phaseReadout');
       const offsetReadout = document.getElementById('offsetReadout');
       const zoneReadout = document.getElementById('zoneReadout');
       const statusLine = document.getElementById('statusLine');
@@ -741,7 +739,6 @@
         nowHalo.setAttribute('fill', zone === 'Awake' ? 'rgba(232,213,163,0.14)' : 'rgba(74,111,165,0.16)');
 
         clockReadout.textContent = formatClock(now);
-        phaseReadout.textContent = `${(dynamicProgress * 100).toFixed(1)}%`;
         zoneReadout.textContent = zone;
         statusLine.textContent = `${formatClock(now)} · cycle ${state.cycleHours.toFixed(1)}h · offset ${(state.zeroProgress * 360).toFixed(1)}°`;
 
