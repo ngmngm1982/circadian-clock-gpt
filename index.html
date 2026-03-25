@@ -804,17 +804,32 @@
         const scaledBottom = centerY + (bottomCritical - centerY) * scale;
         const scaledCx = (scaledLeft + scaledRight) * 0.5;
         const scaledCy = (scaledTop + scaledBottom) * 0.5;
+        const measureFittedBoundsX = (xShift, samples = 260) => {
+          let minX = Infinity;
+          let maxX = -Infinity;
+          for (let i = 0; i <= samples; i += 1) {
+            const base = basePointOnPath(i / samples);
+            const x = centerX + (base.x - centerX) * scale + xShift;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+          }
+          return { minX, maxX };
+        };
+        const clampXShiftToLimits = (candidate) => {
+          let next = candidate;
+          const boundsX = measureFittedBoundsX(next);
+          if (boundsX.minX < leftLimit) next += leftLimit - boundsX.minX;
+          if (boundsX.maxX > rightLimit) next -= boundsX.maxX - rightLimit;
+          return next;
+        };
         const targetCx = (leftLimit + rightLimit) * 0.5;
         const targetCy = (topLimit + bottomLimit) * 0.5;
         let xShift = targetCx - scaledCx;
+        xShift = clampXShiftToLimits(xShift);
+        const centeredBounds = measureFittedBoundsX(xShift);
+        xShift += targetCx - ((centeredBounds.minX + centeredBounds.maxX) * 0.5);
+        xShift = clampXShiftToLimits(xShift);
         let yShift = targetCy - scaledCy;
-        if (scaledLeft < leftLimit) xShift += leftLimit - scaledLeft;
-        if (scaledRight + xShift > rightLimit) {
-          xShift -= (scaledRight + xShift) - rightLimit;
-        }
-        if (scaledLeft + xShift < leftLimit) {
-          xShift += leftLimit - (scaledLeft + xShift);
-        }
         if (scaledTop < topLimit) yShift += topLimit - scaledTop;
         if (scaledBottom + yShift > bottomLimit) {
           yShift -= (scaledBottom + yShift) - bottomLimit;
