@@ -500,15 +500,16 @@
       const baseLoop = {
         cx: 180,
         centerY: 338,
-        rx: 118,
-        baseRy: 118,
+        rx: 122,
+        baseRy: 126,
       };
       const minCycleHours = sleepHoursRange.min + awakeHoursRange.min;
       const maxCycleHours = sleepHoursRange.max + awakeHoursRange.max;
-      const minVerticalScale = 0.68;
-      const minHorizontalScale = 0.88;
-      const ratioStrength = 0.34;
-      const ratioHorizontalStrength = 0.22;
+      const verticalScaleRange = { min: 0.92, max: 1.2 };
+      const horizontalScaleRange = { min: 0.96, max: 1.08 };
+      const ratioStrength = 0.4;
+      const ratioHorizontalStrength = 0.16;
+      const displayFit = { x: 1.06, y: 1.16, yOffset: -6 };
 
       const localEpoch = new Date(1970, 0, 1, 0, 0, 0, 0).getTime();
 
@@ -577,13 +578,13 @@
       function verticalScaleForCycle(cycleHours) {
         const normalized = (cycleHours - minCycleHours) / (maxCycleHours - minCycleHours);
         const eased = smoothstep01(normalized);
-        return minVerticalScale + (1 - minVerticalScale) * eased;
+        return verticalScaleRange.min + (verticalScaleRange.max - verticalScaleRange.min) * eased;
       }
 
       function horizontalScaleForCycle(cycleHours) {
         const normalized = (cycleHours - minCycleHours) / (maxCycleHours - minCycleHours);
         const eased = smoothstep01(normalized);
-        return minHorizontalScale + (1 - minHorizontalScale) * eased;
+        return horizontalScaleRange.min + (horizontalScaleRange.max - horizontalScaleRange.min) * eased;
       }
 
       function computeFigureGeometry() {
@@ -601,7 +602,7 @@
         const upperRy = baseLoop.baseRy * verticalScale * upperRatioScale;
         const lowerRy = baseLoop.baseRy * verticalScale * lowerRatioScale;
         const separation = upperRy + lowerRy;
-        const midY = baseLoop.centerY + ratioDelta * 26;
+        const midY = baseLoop.centerY + ratioDelta * 20;
 
         return {
           total,
@@ -638,12 +639,14 @@
         const topBlend = smoothstep01((v + 1) * 0.5);
         const rx = figure.lower.rx + (figure.upper.rx - figure.lower.rx) * topBlend;
         const ry = figure.lower.ry + (figure.upper.ry - figure.lower.ry) * topBlend;
-        const neckPinch = 0.32 + 0.68 * v * v;
-        const sideBulge = 0.86 + 0.14 * (1 - v * v);
-        const xTerm = 2.35 * h * v * neckPinch * sideBulge;
+        const neckPinch = 0.46 + 0.54 * v * v;
+        const sideBulge = 0.9 + 0.18 * (1 - v * v);
+        const xTerm = 2.62 * h * v * neckPinch * sideBulge;
+        const rawX = baseLoop.cx + rx * xTerm;
+        const rawY = figure.midY - v * ry;
         return {
-          x: baseLoop.cx + rx * xTerm,
-          y: figure.midY - v * ry,
+          x: baseLoop.cx + (rawX - baseLoop.cx) * displayFit.x,
+          y: baseLoop.centerY + (rawY - baseLoop.centerY) * displayFit.y + displayFit.yOffset,
         };
       }
 
@@ -778,7 +781,7 @@
 
       function updateFigureLayout() {
         activeGeometry = computeFigureGeometry();
-        const figure = currentFigureGeometry();
+        const fractions = cycleFractions();
 
         const awakePath = awakeTrackPath();
         const sleepPath = sleepTrackPath();
@@ -788,18 +791,23 @@
         sleepBoldTrack.setAttribute('d', sleepPath);
 
         const sideExtent = horizontalExtentOnPath();
+        const neckA = pointOnPath(fractions.awakeHalf);
+        const neckB = pointOnPath(fractions.awakeHalf + fractions.sleep);
+        const neckY = (neckA.y + neckB.y) * 0.5;
+        const topPoint = pointOnPath(0);
+        const bottomPoint = pointOnPath(fractions.awakeHalf + fractions.sleep * 0.5);
         midLine.setAttribute('x1', baseLoop.cx - sideExtent);
         midLine.setAttribute('x2', baseLoop.cx + sideExtent);
-        midLine.setAttribute('y1', figure.midY);
-        midLine.setAttribute('y2', figure.midY);
+        midLine.setAttribute('y1', neckY);
+        midLine.setAttribute('y2', neckY);
         label0.setAttribute('x', baseLoop.cx);
         label12.setAttribute('x', baseLoop.cx);
         label6.setAttribute('x', baseLoop.cx + sideExtent + 16);
         label18.setAttribute('x', baseLoop.cx - sideExtent - 16);
-        label0.setAttribute('y', figure.upper.cy - figure.upper.ry - 26);
-        label6.setAttribute('y', figure.midY + 6);
-        label12.setAttribute('y', figure.lower.cy + figure.lower.ry + 24);
-        label18.setAttribute('y', figure.midY + 6);
+        label0.setAttribute('y', topPoint.y - 26);
+        label6.setAttribute('y', neckY + 6);
+        label12.setAttribute('y', bottomPoint.y + 24);
+        label18.setAttribute('y', neckY + 6);
       }
 
       function formatDialHours(value) {
