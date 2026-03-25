@@ -425,7 +425,7 @@
       <div class="sheetHandle"></div>
       <div class="sheetTitleRow">
         <h2 class="sheetTitle">Settings</h2>
-        <div class="metric" id="cycleReadout">24.0 h cycle</div>
+        <div class="metric" id="cycleReadout">25.0 h cycle</div>
       </div>
     </div>
 
@@ -439,10 +439,25 @@
 
       <div class="row">
         <div class="rowHeader">
-          <span>サイクル時間</span>
-          <span class="metric" id="cycleSliderReadout">24.0h</span>
+          <span>サイクル時間（合計）</span>
+          <span class="metric" id="cycleTotalReadout">25.0h</span>
         </div>
-        <input id="cycleSlider" type="range" min="15" max="30" step="0.25" value="24" />
+      </div>
+
+      <div class="row">
+        <div class="rowHeader">
+          <span>睡眠時間</span>
+          <span class="metric" id="sleepSliderReadout">9.0h</span>
+        </div>
+        <input id="sleepSlider" type="range" min="4" max="14" step="0.25" value="9" />
+      </div>
+
+      <div class="row">
+        <div class="rowHeader">
+          <span>覚醒時間</span>
+          <span class="metric" id="awakeSliderReadout">16.0h</span>
+        </div>
+        <input id="awakeSlider" type="range" min="8" max="20" step="0.25" value="16" />
       </div>
 
       <div class="grid2">
@@ -470,9 +485,12 @@
       const nowMarker = document.getElementById('nowMarker');
       const nowHalo = document.getElementById('nowHalo');
       const nowCore = document.getElementById('nowCore');
-      const cycleSlider = document.getElementById('cycleSlider');
+      const sleepSlider = document.getElementById('sleepSlider');
+      const awakeSlider = document.getElementById('awakeSlider');
       const cycleReadout = document.getElementById('cycleReadout');
-      const cycleSliderReadout = document.getElementById('cycleSliderReadout');
+      const cycleTotalReadout = document.getElementById('cycleTotalReadout');
+      const sleepSliderReadout = document.getElementById('sleepSliderReadout');
+      const awakeSliderReadout = document.getElementById('awakeSliderReadout');
       const clockReadout = document.getElementById('clockReadout');
       const offsetReadout = document.getElementById('offsetReadout');
       const zoneReadout = document.getElementById('zoneReadout');
@@ -490,20 +508,24 @@
       const label12 = document.getElementById('label12');
       const label18 = document.getElementById('label18');
 
-      const geometry = {
-        upper: { cx: 180, cy: 220, r: 118 },
-        lower: { cx: 180, cy: 456, r: 118 },
+      const sleepHoursRange = { min: 4, max: 14 };
+      const awakeHoursRange = { min: 8, max: 20 };
+      const baseLoop = {
+        cx: 180,
+        centerY: 338,
+        rx: 118,
+        baseRy: 118,
       };
-      const figureCenterY = (geometry.upper.cy + geometry.lower.cy) * 0.5;
-      const minCycleHours = 15;
-      const maxCycleHours = 30;
+      const minCycleHours = sleepHoursRange.min + awakeHoursRange.min;
+      const maxCycleHours = sleepHoursRange.max + awakeHoursRange.max;
       const minVerticalScale = 0.68;
-      const labelBaseY = { h0: 76, h6: 344, h12: 598, h18: 344 };
+      const ratioStrength = 0.34;
 
       const localEpoch = new Date(1970, 0, 1, 0, 0, 0, 0).getTime();
 
       let state = {
-        cycleHours: 24,
+        sleepHours: 9,
+        awakeHours: 16,
         zeroProgress: 0,
         sheetOpen: true,
       };
@@ -513,7 +535,7 @@
       let dragPointerId = null;
       let dragLastPoint = null;
       let dragTravelDirection = 0;
-      let figureVerticalScale = 1;
+      let activeGeometry = null;
       let raf = null;
 
       function load() {
@@ -521,7 +543,15 @@
           const raw = localStorage.getItem(STORAGE_KEY);
           if (!raw) return;
           const saved = JSON.parse(raw);
-          if (typeof saved.cycleHours === 'number') state.cycleHours = clamp(saved.cycleHours, 15, 30);
+          const hasSleep = typeof saved.sleepHours === 'number';
+          const hasAwake = typeof saved.awakeHours === 'number';
+          if (hasSleep) state.sleepHours = clamp(saved.sleepHours, sleepHoursRange.min, sleepHoursRange.max);
+          if (hasAwake) state.awakeHours = clamp(saved.awakeHours, awakeHoursRange.min, awakeHoursRange.max);
+          if (!hasSleep && !hasAwake && typeof saved.cycleHours === 'number') {
+            const migratedTotal = clamp(saved.cycleHours, minCycleHours, maxCycleHours);
+            state.awakeHours = clamp(migratedTotal * (16 / 25), awakeHoursRange.min, awakeHoursRange.max);
+            state.sleepHours = clamp(migratedTotal - state.awakeHours, sleepHoursRange.min, sleepHoursRange.max);
+          }
           if (typeof saved.zeroProgress === 'number') state.zeroProgress = wrap(saved.zeroProgress);
           if (typeof saved.sheetOpen === 'boolean') state.sheetOpen = saved.sheetOpen;
         } catch (_) {}
@@ -548,39 +578,61 @@
         return t * t * (3 - 2 * t);
       }
 
+      function totalCycleHours() {
+        return state.sleepHours + state.awakeHours;
+      }
+
       function verticalScaleForCycle(cycleHours) {
         const normalized = (cycleHours - minCycleHours) / (maxCycleHours - minCycleHours);
         const eased = smoothstep01(normalized);
         return minVerticalScale + (1 - minVerticalScale) * eased;
       }
 
-      function scaleFigureY(y) {
-        return figureCenterY + (y - figureCenterY) * figureVerticalScale;
+      function computeFigureGeometry() {
+        const total = totalCycleHours();
+        const verticalScale = verticalScaleForCycle(total);
+        const awakeRatio = total > 0 ? state.awakeHours / total : 0.5;
+        const ratioDelta = awakeRatio - 0.5;
+        const upperRatioScale = clamp(1 + ratioDelta * 2 * ratioStrength, 0.72, 1.28);
+        const lowerRatioScale = clamp(1 - ratioDelta * 2 * ratioStrength, 0.72, 1.28);
+        const upperRy = baseLoop.baseRy * verticalScale * upperRatioScale;
+        const lowerRy = baseLoop.baseRy * verticalScale * lowerRatioScale;
+        const separation = upperRy + lowerRy;
+
+        return {
+          total,
+          midY: baseLoop.centerY,
+          upper: { cx: baseLoop.cx, cy: baseLoop.centerY - separation * 0.5, rx: baseLoop.rx, ry: upperRy },
+          lower: { cx: baseLoop.cx, cy: baseLoop.centerY + separation * 0.5, rx: baseLoop.rx, ry: lowerRy },
+        };
       }
 
-      function pointOnCircle(circle, deg) {
+      function currentFigureGeometry() {
+        if (!activeGeometry) activeGeometry = computeFigureGeometry();
+        return activeGeometry;
+      }
+
+      function pointOnLoop(loop, deg) {
         const a = toRad(deg);
         return {
-          x: circle.cx + Math.cos(a) * circle.r,
-          y: circle.cy + Math.sin(a) * circle.r,
+          x: loop.cx + Math.cos(a) * loop.rx,
+          y: loop.cy + Math.sin(a) * loop.ry,
         };
       }
 
       function pointOnPath(progress) {
+        const figure = currentFigureGeometry();
         const p = wrap(progress);
         if (p < 0.25) {
           const t = p / 0.25;
-          const basePoint = pointOnCircle(geometry.upper, -90 - t * 180);
-          return { x: basePoint.x, y: scaleFigureY(basePoint.y) };
+          return pointOnLoop(figure.upper, -90 - t * 180);
         }
         if (p < 0.75) {
           const t = (p - 0.25) / 0.5;
-          const basePoint = pointOnCircle(geometry.lower, -90 + t * 360);
-          return { x: basePoint.x, y: scaleFigureY(basePoint.y) };
+          return pointOnLoop(figure.lower, -90 + t * 360);
         }
         const t = (p - 0.75) / 0.25;
-        const basePoint = pointOnCircle(geometry.upper, 90 - t * 180);
-        return { x: basePoint.x, y: scaleFigureY(basePoint.y) };
+        return pointOnLoop(figure.upper, 90 - t * 180);
       }
 
       function zoneForProgress(progress) {
@@ -677,27 +729,27 @@
       }
 
       function updateFigureLayout() {
-        figureVerticalScale = verticalScaleForCycle(state.cycleHours);
+        activeGeometry = computeFigureGeometry();
+        const figure = activeGeometry;
+        upperThinTrack.setAttribute('cy', figure.upper.cy);
+        lowerThinTrack.setAttribute('cy', figure.lower.cy);
+        upperBoldTrack.setAttribute('cy', figure.upper.cy);
+        lowerBoldTrack.setAttribute('cy', figure.lower.cy);
+        upperThinTrack.setAttribute('ry', figure.upper.ry);
+        lowerThinTrack.setAttribute('ry', figure.lower.ry);
+        upperBoldTrack.setAttribute('ry', figure.upper.ry);
+        lowerBoldTrack.setAttribute('ry', figure.lower.ry);
+        upperThinTrack.setAttribute('rx', figure.upper.rx);
+        lowerThinTrack.setAttribute('rx', figure.lower.rx);
+        upperBoldTrack.setAttribute('rx', figure.upper.rx);
+        lowerBoldTrack.setAttribute('rx', figure.lower.rx);
 
-        const upperCy = scaleFigureY(geometry.upper.cy);
-        const lowerCy = scaleFigureY(geometry.lower.cy);
-        const ry = geometry.upper.r * figureVerticalScale;
-        upperThinTrack.setAttribute('cy', upperCy);
-        lowerThinTrack.setAttribute('cy', lowerCy);
-        upperBoldTrack.setAttribute('cy', upperCy);
-        lowerBoldTrack.setAttribute('cy', lowerCy);
-        upperThinTrack.setAttribute('ry', ry);
-        lowerThinTrack.setAttribute('ry', ry);
-        upperBoldTrack.setAttribute('ry', ry);
-        lowerBoldTrack.setAttribute('ry', ry);
-
-        const midY = scaleFigureY(338);
-        midLine.setAttribute('y1', midY);
-        midLine.setAttribute('y2', midY);
-        label0.setAttribute('y', scaleFigureY(labelBaseY.h0));
-        label6.setAttribute('y', scaleFigureY(labelBaseY.h6));
-        label12.setAttribute('y', scaleFigureY(labelBaseY.h12));
-        label18.setAttribute('y', scaleFigureY(labelBaseY.h18));
+        midLine.setAttribute('y1', figure.midY);
+        midLine.setAttribute('y2', figure.midY);
+        label0.setAttribute('y', figure.upper.cy - figure.upper.ry - 26);
+        label6.setAttribute('y', figure.midY + 6);
+        label12.setAttribute('y', figure.lower.cy + figure.lower.ry + 24);
+        label18.setAttribute('y', figure.midY + 6);
       }
 
       function formatDialHours(value) {
@@ -706,7 +758,7 @@
       }
 
       function updateDialLabels() {
-        const quarter = state.cycleHours / 4;
+        const quarter = totalCycleHours() / 4;
         label0.textContent = '0';
         label6.textContent = formatDialHours(quarter);
         label12.textContent = formatDialHours(quarter * 2);
@@ -714,11 +766,15 @@
       }
 
       function updateStatic() {
+        const total = totalCycleHours();
         updateFigureLayout();
         updateDialLabels();
-        cycleSlider.value = String(state.cycleHours);
-        cycleReadout.textContent = `${state.cycleHours.toFixed(1)} h cycle`;
-        cycleSliderReadout.textContent = `${state.cycleHours.toFixed(1)}h`;
+        sleepSlider.value = String(state.sleepHours);
+        awakeSlider.value = String(state.awakeHours);
+        cycleReadout.textContent = `${total.toFixed(1)} h cycle`;
+        cycleTotalReadout.textContent = `${total.toFixed(1)}h`;
+        sleepSliderReadout.textContent = `${state.sleepHours.toFixed(1)}h`;
+        awakeSliderReadout.textContent = `${state.awakeHours.toFixed(1)}h`;
         offsetReadout.textContent = `${(state.zeroProgress * 100).toFixed(1)}%`;
         const zeroPt = pointOnPath(state.zeroProgress);
         setMarker(zeroHalo, zeroPt.x, zeroPt.y);
@@ -735,7 +791,8 @@
 
       function render() {
         const now = new Date();
-        const cycleMs = state.cycleHours * 60 * 60 * 1000;
+        const totalCycle = totalCycleHours();
+        const cycleMs = totalCycle * 60 * 60 * 1000;
         const elapsedMs = Date.now() - localEpoch;
         const dynamicProgress = wrap(elapsedMs / cycleMs + state.zeroProgress);
         const nowPt = pointOnPath(dynamicProgress);
@@ -750,7 +807,7 @@
 
         clockReadout.textContent = formatClock(now);
         zoneReadout.textContent = zone;
-        statusLine.textContent = `${formatClock(now)} · cycle ${state.cycleHours.toFixed(1)}h · offset ${(state.zeroProgress * 360).toFixed(1)}°`;
+        statusLine.textContent = `${formatClock(now)} · cycle ${totalCycle.toFixed(1)}h · offset ${(state.zeroProgress * 360).toFixed(1)}°`;
 
         raf = requestAnimationFrame(render);
       }
@@ -818,8 +875,14 @@
       updateStatic();
       render();
 
-      cycleSlider.addEventListener('input', () => {
-        state.cycleHours = clamp(parseFloat(cycleSlider.value), 15, 30);
+      sleepSlider.addEventListener('input', () => {
+        state.sleepHours = clamp(parseFloat(sleepSlider.value), sleepHoursRange.min, sleepHoursRange.max);
+        updateStatic();
+        save();
+      });
+
+      awakeSlider.addEventListener('input', () => {
+        state.awakeHours = clamp(parseFloat(awakeSlider.value), awakeHoursRange.min, awakeHoursRange.max);
         updateStatic();
         save();
       });
