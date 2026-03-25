@@ -616,12 +616,35 @@
         const ratioBalance = (upperRy - lowerRy) / Math.max(upperRy + lowerRy, 1e-6);
         const midY = baseLoop.centerY + ratioBalance * 12;
 
-        return {
+        const figure = {
           total,
           midY,
           ratioBalance,
           upper: { cx: baseLoop.cx, cy: midY - separation * 0.5, rx: upperRx, ry: upperRy },
           lower: { cx: baseLoop.cx, cy: midY + separation * 0.5, rx: lowerRx, ry: lowerRy },
+        };
+
+        const neutralMidY = baseLoop.centerY;
+        const neutralFigure = {
+          total,
+          midY: neutralMidY,
+          ratioBalance: 0,
+          upper: { cx: baseLoop.cx, cy: neutralMidY - baseVertical, rx: baseLoop.rx * horizontalScale, ry: baseVertical },
+          lower: { cx: baseLoop.cx, cy: neutralMidY + baseVertical, rx: baseLoop.rx * horizontalScale, ry: baseVertical },
+        };
+
+        const actualBounds = measureRawBounds(figure, 168);
+        const targetBounds = measureRawBounds(neutralFigure, 168);
+        const normalizeX = clamp(targetBounds.width / Math.max(actualBounds.width, 1e-6), 0.9, 1.15);
+        const normalizeY = clamp(targetBounds.height / Math.max(actualBounds.height, 1e-6), 0.92, 1.18);
+        const centerOffsetY = (baseLoop.centerY - actualBounds.cy) * 0.38;
+
+        return {
+          ...figure,
+          normalizeX,
+          normalizeY,
+          centerOffsetY,
+          rawCenterY: actualBounds.cy,
         };
       }
 
@@ -645,8 +668,7 @@
         return Math.PI * 1.5 + t * (Math.PI * 0.5);
       }
 
-      function pointAtPhase(phase) {
-        const figure = currentFigureGeometry();
+      function rawPointAtPhase(phase, figure) {
         const v = Math.cos(phase);
         const h = Math.sin(phase);
         const topBlend = smoothstep01((v + 1) * 0.5);
@@ -655,11 +677,41 @@
         const centerSpread = 0.92 + 0.2 * (1 - v * v);
         const topBottomSettle = 0.95 + 0.1 * (v * v);
         const xTerm = 2.7 * h * v * centerSpread * topBottomSettle;
-        const rawX = baseLoop.cx + rx * xTerm;
-        const rawY = figure.midY - v * ry;
         return {
-          x: baseLoop.cx + (rawX - baseLoop.cx) * displayFit.x,
-          y: baseLoop.centerY + (rawY - baseLoop.centerY) * displayFit.y + displayFit.yOffset,
+          x: baseLoop.cx + rx * xTerm,
+          y: figure.midY - v * ry,
+        };
+      }
+
+      function measureRawBounds(figure, samples = 168) {
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        for (let i = 0; i <= samples; i += 1) {
+          const phase = (Math.PI * 2 * i) / samples;
+          const pt = rawPointAtPhase(phase, figure);
+          if (pt.x < minX) minX = pt.x;
+          if (pt.x > maxX) maxX = pt.x;
+          if (pt.y < minY) minY = pt.y;
+          if (pt.y > maxY) maxY = pt.y;
+        }
+        return {
+          width: maxX - minX,
+          height: maxY - minY,
+          cx: (minX + maxX) * 0.5,
+          cy: (minY + maxY) * 0.5,
+        };
+      }
+
+      function pointAtPhase(phase) {
+        const figure = currentFigureGeometry();
+        const raw = rawPointAtPhase(phase, figure);
+        const normalizedX = baseLoop.cx + (raw.x - baseLoop.cx) * figure.normalizeX;
+        const normalizedY = figure.rawCenterY + (raw.y - figure.rawCenterY) * figure.normalizeY + figure.centerOffsetY;
+        return {
+          x: baseLoop.cx + (normalizedX - baseLoop.cx) * displayFit.x,
+          y: baseLoop.centerY + (normalizedY - baseLoop.centerY) * displayFit.y + displayFit.yOffset,
         };
       }
 
