@@ -802,15 +802,25 @@
         const scaledRight = centerX + (rightCritical - centerX) * scale;
         const scaledTop = centerY + (topCritical - centerY) * scale;
         const scaledBottom = centerY + (bottomCritical - centerY) * scale;
-        let xShift = 0;
-        let yShift = 0;
+        const scaledCx = (scaledLeft + scaledRight) * 0.5;
+        const scaledCy = (scaledTop + scaledBottom) * 0.5;
+        const targetCx = (leftLimit + rightLimit) * 0.5;
+        const targetCy = (topLimit + bottomLimit) * 0.5;
+        let xShift = targetCx - scaledCx;
+        let yShift = targetCy - scaledCy;
         if (scaledLeft < leftLimit) xShift += leftLimit - scaledLeft;
         if (scaledRight + xShift > rightLimit) {
           xShift -= (scaledRight + xShift) - rightLimit;
         }
+        if (scaledLeft + xShift < leftLimit) {
+          xShift += leftLimit - (scaledLeft + xShift);
+        }
         if (scaledTop < topLimit) yShift += topLimit - scaledTop;
         if (scaledBottom + yShift > bottomLimit) {
           yShift -= (scaledBottom + yShift) - bottomLimit;
+        }
+        if (scaledTop + yShift < topLimit) {
+          yShift += topLimit - (scaledTop + yShift);
         }
         runtimeFit = { scale, xShift, yShift };
         fitDirty = false;
