@@ -689,7 +689,9 @@
         const topBlend = smoothstep01((yAnalemma + 1) * 0.5);
         const rx = figure.lower.rx + (figure.upper.rx - figure.lower.rx) * topBlend;
         const ry = figure.lower.ry + (figure.upper.ry - figure.lower.ry) * topBlend;
-        const xTerm = xAnalemma;
+        // Keep analemma equation shape, but avoid a visually heavy lower bulb.
+        const lowerSlim = 0.82 + 0.18 * topBlend;
+        const xTerm = xAnalemma * lowerSlim;
         const yTerm = yAnalemma;
         return {
           x: baseLoop.cx + rx * xTerm * 0.98,
