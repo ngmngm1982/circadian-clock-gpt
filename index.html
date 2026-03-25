@@ -700,8 +700,22 @@
         label18.setAttribute('y', scaleFigureY(labelBaseY.h18));
       }
 
+      function formatDialHours(value) {
+        const rounded = Math.round(value * 10) / 10;
+        return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+      }
+
+      function updateDialLabels() {
+        const quarter = state.cycleHours / 4;
+        label0.textContent = '0';
+        label6.textContent = formatDialHours(quarter);
+        label12.textContent = formatDialHours(quarter * 2);
+        label18.textContent = formatDialHours(quarter * 3);
+      }
+
       function updateStatic() {
         updateFigureLayout();
+        updateDialLabels();
         cycleSlider.value = String(state.cycleHours);
         cycleReadout.textContent = `${state.cycleHours.toFixed(1)} h cycle`;
         cycleSliderReadout.textContent = `${state.cycleHours.toFixed(1)}h`;
