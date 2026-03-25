@@ -671,21 +671,25 @@
       }
 
       function rawPointAtPhase(phase, figure) {
-        const v = Math.cos(phase);
-        const h = Math.sin(phase);
-        const topBlend = smoothstep01((v + 1) * 0.5);
+        // Analemma-inspired unit curve (single continuous path, asymmetric lobes).
+        const t = phase + Math.PI * 0.5;
+        const s = Math.sin(t);
+        const c = Math.cos(t);
+        const lobe = Math.sin(2 * t - 0.22);
+        const shoulder = Math.sin(3 * t - 0.55);
+        const yAnalemma = 0.94 * lobe + 0.52 * s + 0.1 * s * s + 0.02;
+        const topBlend = smoothstep01((yAnalemma + 1.22) / 2.44);
         const rx = figure.lower.rx + (figure.upper.rx - figure.lower.rx) * topBlend;
         const ry = figure.lower.ry + (figure.upper.ry - figure.lower.ry) * topBlend;
-        const absV = Math.abs(v);
-        const neckEase = Math.pow(absV, 0.82);
-        const shoulderFullness = 0.94 + 0.2 * (1 - absV * absV);
-        const topTaper = 1 - 0.14 * topBlend;
-        const bottomRoundness = 0.98 + 0.1 * (1 - topBlend);
-        const xTerm = 2.56 * h * v * neckEase * shoulderFullness * topTaper * bottomRoundness;
-        const yStretch = 0.94 + 0.12 * topBlend;
+        const xAnalemma = 1.04 * (s * c) + 0.23 * shoulder - 0.06 * s;
+        const neckNarrow = 0.74 + 0.26 * clamp(Math.abs(yAnalemma), 0, 1);
+        const topUpright = 1 - 0.18 * topBlend;
+        const lowerRound = 0.96 + 0.1 * (1 - topBlend);
+        const xTerm = 1.52 * xAnalemma * neckNarrow * topUpright * lowerRound;
+        const yTerm = yAnalemma * (0.9 + 0.12 * topBlend);
         return {
           x: baseLoop.cx + rx * xTerm,
-          y: figure.midY - (v * yStretch) * ry,
+          y: figure.midY - yTerm * ry,
         };
       }
 
