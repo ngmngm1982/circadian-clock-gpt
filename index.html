@@ -482,6 +482,7 @@
       const awakeSliderReadout = document.getElementById('awakeSliderReadout');
       const clockReadout = document.getElementById('clockReadout');
       const statusLine = document.getElementById('statusLine');
+      const hud = document.querySelector('.hud');
       const sheet = document.getElementById('sheet');
       const sheetHeader = document.getElementById('sheetHeader');
       const sheetToggle = document.getElementById('sheetToggle');
@@ -755,24 +756,39 @@
         const rect = svg.getBoundingClientRect();
         const pxToVbY = vb.height / Math.max(rect.height, 1);
         const portrait = isPhonePortrait();
-        const topSafety = (portrait ? 42 : 26) * pxToVbY;
-        const bottomSafety = (portrait ? 16 : 12) * pxToVbY;
+
+        // Derive effective top/bottom limits from real overlay layout, not constants only.
+        let topLimitPx = rect.top + (portrait ? 12 : 10);
+        if (hud) {
+          const hudRect = hud.getBoundingClientRect();
+          topLimitPx = Math.max(topLimitPx, hudRect.bottom + (portrait ? 10 : 8));
+        }
+        let bottomLimitPx = rect.bottom - (portrait ? 10 : 8);
+        const sheetRect = sheet.getBoundingClientRect();
+        if (sheetRect.top < rect.bottom) {
+          bottomLimitPx = Math.min(bottomLimitPx, sheetRect.top - (portrait ? 14 : 10));
+        }
+        if (bottomLimitPx <= topLimitPx + 20) {
+          bottomLimitPx = topLimitPx + 20;
+        }
+        const topLimit = vb.y + (topLimitPx - rect.top) * pxToVbY;
+        const bottomLimit = vb.y + (bottomLimitPx - rect.top) * pxToVbY;
 
         const bounds = measureBasePathBounds();
         const topPoint = basePointOnPath(0);
         const topCritical = Math.min(bounds.minY - 22, topPoint.y - 38);
-        const bottomCritical = bounds.maxY + 22;
+        const bottomCritical = bounds.maxY + 24;
         const criticalSpan = bottomCritical - topCritical;
-        const availableSpan = vb.height - topSafety - bottomSafety;
+        const availableSpan = bottomLimit - topLimit;
         const scale = Math.min(1, availableSpan / Math.max(criticalSpan, 1e-6));
 
         const centerY = baseLoop.centerY;
         const scaledTop = centerY + (topCritical - centerY) * scale;
         const scaledBottom = centerY + (bottomCritical - centerY) * scale;
         let yShift = 0;
-        if (scaledTop < topSafety) yShift += topSafety - scaledTop;
-        if (scaledBottom + yShift > vb.height - bottomSafety) {
-          yShift -= (scaledBottom + yShift) - (vb.height - bottomSafety);
+        if (scaledTop < topLimit) yShift += topLimit - scaledTop;
+        if (scaledBottom + yShift > bottomLimit) {
+          yShift -= (scaledBottom + yShift) - bottomLimit;
         }
         runtimeFit = { scale, yShift };
         fitDirty = false;
@@ -1061,6 +1077,8 @@
       function toggleSheet() {
         state.sheetOpen = !state.sheetOpen;
         updateSheetState();
+        fitDirty = true;
+        updateStatic();
         save();
       }
 
@@ -1097,6 +1115,10 @@
         }
       });
       sheetToggle.addEventListener('click', toggleSheet);
+      sheet.addEventListener('transitionend', () => {
+        fitDirty = true;
+        updateStatic();
+      });
 
       window.addEventListener('visibilitychange', () => {
         if (document.hidden && raf) {
