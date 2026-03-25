@@ -669,9 +669,7 @@
         const pt = svgPointFromClient(event.clientX, event.clientY);
         const target = nearestProgressFromPoint(pt.x, pt.y, dragProgressContinuous);
         const maxStep = 0.06;
-        const jumpGuard = 0.12;
         const delta = target - dragProgressContinuous;
-        if (Math.abs(delta) > jumpGuard) return;
         if (Math.abs(delta) > maxStep) {
           dragProgressContinuous += Math.sign(delta) * maxStep;
         } else {
