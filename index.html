@@ -504,6 +504,7 @@
       let dragProgressContinuous = 0;
       let dragPointerId = null;
       let dragLastPoint = null;
+      let dragDirection = 0;
       let raf = null;
 
       function load() {
@@ -694,6 +695,7 @@
         dragPointerId = event.pointerId;
         dragProgressContinuous = state.zeroProgress;
         dragLastPoint = startPt;
+        dragDirection = 0;
         try { svg.setPointerCapture(event.pointerId); } catch (_) {}
         onDragMove(event);
       }
@@ -704,10 +706,17 @@
         const pt = svgPointFromClient(event.clientX, event.clientY);
         const lastPt = dragLastPoint || pt;
         const moveDistance = Math.hypot(pt.x - lastPt.x, pt.y - lastPt.y);
-        const searchSpan = clamp(0.12 + moveDistance * 0.0032, 0.12, 0.24);
+        const searchSpan = clamp(0.1 + moveDistance * 0.003, 0.1, 0.2);
         const target = nearestProgressFromPoint(pt.x, pt.y, dragProgressContinuous, searchSpan);
-        const delta = target - dragProgressContinuous;
-        const maxDelta = clamp(0.05 + moveDistance * 0.0045, 0.05, 0.2);
+        let delta = target - dragProgressContinuous;
+        const reversalThreshold = 0.03;
+        const directionLockThreshold = 0.006;
+        if (dragDirection !== 0 && delta * dragDirection < 0 && Math.abs(delta) < reversalThreshold) {
+          delta = 0;
+        } else if (Math.abs(delta) >= directionLockThreshold) {
+          dragDirection = Math.sign(delta);
+        }
+        const maxDelta = clamp(0.035 + moveDistance * 0.0035, 0.035, 0.12);
         dragProgressContinuous += clamp(delta, -maxDelta, maxDelta);
         dragLastPoint = pt;
         state.zeroProgress = wrap(dragProgressContinuous);
@@ -720,6 +729,7 @@
         dragging = false;
         dragPointerId = null;
         dragLastPoint = null;
+        dragDirection = 0;
         try { svg.releasePointerCapture(event.pointerId); } catch (_) {}
       }
 
