@@ -677,16 +677,16 @@
         const c = Math.cos(t);
         const lobe = Math.sin(2 * t - 0.22);
         const shoulder = Math.sin(3 * t - 0.55);
-        const yAnalemma = 0.94 * lobe + 0.52 * s + 0.1 * s * s + 0.02;
+        const yAnalemma = 0.86 * lobe + 0.46 * s + 0.07 * s * s - 0.015;
         const topBlend = smoothstep01((yAnalemma + 1.22) / 2.44);
         const rx = figure.lower.rx + (figure.upper.rx - figure.lower.rx) * topBlend;
         const ry = figure.lower.ry + (figure.upper.ry - figure.lower.ry) * topBlend;
-        const xAnalemma = 1.04 * (s * c) + 0.23 * shoulder - 0.06 * s;
-        const neckNarrow = 0.74 + 0.26 * clamp(Math.abs(yAnalemma), 0, 1);
-        const topUpright = 1 - 0.18 * topBlend;
-        const lowerRound = 0.96 + 0.1 * (1 - topBlend);
-        const xTerm = 1.52 * xAnalemma * neckNarrow * topUpright * lowerRound;
-        const yTerm = yAnalemma * (0.9 + 0.12 * topBlend);
+        const xAnalemma = 1.1 * (s * c) + 0.3 * shoulder - 0.02 * s;
+        const neckNarrow = 0.66 + 0.34 * clamp(Math.abs(yAnalemma), 0, 1);
+        const topUpright = 1 - 0.1 * topBlend;
+        const lowerRound = 0.99 + 0.12 * (1 - topBlend);
+        const xTerm = 1.62 * xAnalemma * neckNarrow * topUpright * lowerRound;
+        const yTerm = yAnalemma * (0.93 + 0.08 * topBlend);
         return {
           x: baseLoop.cx + rx * xTerm,
           y: figure.midY - yTerm * ry,
